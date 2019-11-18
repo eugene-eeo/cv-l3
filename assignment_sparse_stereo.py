@@ -89,8 +89,8 @@ def get_distance(depth_map, bounding_box):
 
 # Does preprocessing of the grayscale images
 def preprocess(imgL, imgR):
-    # imgL = cv2.bilateralFilter(imgL, 5, 50, 20)
-    # imgR = cv2.bilateralFilter(imgR, 5, 50, 20)
+    imgL = cv2.bilateralFilter(imgL, 5, 50, 20)
+    imgR = cv2.bilateralFilter(imgR, 5, 50, 20)
 
     grayL = cv2.cvtColor(imgL,cv2.COLOR_BGR2GRAY)
     grayR = cv2.cvtColor(imgR,cv2.COLOR_BGR2GRAY)

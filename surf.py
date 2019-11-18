@@ -10,7 +10,7 @@ index_params = {"algorithm": FLANN_INDEX_LSH,
 
 
 def match(grayL, grayR):
-    feature_object = cv2.ORB_create(800)
+    feature_object = cv2.ORB_create(1000)
     l_keypoints, l_descriptors = feature_object.detectAndCompute(grayL, None)
     r_keypoints, r_descriptors = feature_object.detectAndCompute(grayR, None)
 
