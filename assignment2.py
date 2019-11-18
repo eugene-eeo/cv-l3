@@ -17,6 +17,7 @@
 import cv2
 import os
 import numpy as np
+# from scipy import stats
 from yolo2 import yolov3
 
 # where is the data ? - set this to where you have it
@@ -67,6 +68,8 @@ def depth_map(disparity, max_disparity):
 def get_distance(depth_map, bounding_box):
     x0, x1, y0, y1 = bounding_box
     return np.nanquantile(depth_map[y0:y1, x0:x1], 0.25)
+    # x, _ = stats.mode(depth_map[y0:y1, x0:x1], nan_policy='omit', axis=None)
+    # return x[0]
 
 #####################################################################
 
@@ -114,19 +117,27 @@ def hist_match(source, template):
     return interp_t_values[bin_idx].reshape(oldshape)
 
 
+def sharpen(img):
+    kernel = np.array([[-1,-1,-1], [-1,9,-1], [-1,-1,-1]])
+    img = cv2.filter2D(img, -1, kernel)
+    return img
+
+
 # Does preprocessing of the grayscale images
 def preprocess(imgL, imgR):
-    grayL = cv2.cvtColor(imgL,cv2.COLOR_BGR2GRAY);
-    grayR = cv2.cvtColor(imgR,cv2.COLOR_BGR2GRAY);
+    imgL = cv2.bilateralFilter(imgL, 5, 50, 20)
+    imgR = cv2.bilateralFilter(imgR, 5, 50, 20)
 
-    # grayL = cv2.bilateralFilter(grayL, 5, 50, 50);
-    # grayR = cv2.bilateralFilter(grayR, 5, 50, 50);
+    grayL = cv2.cvtColor(imgL,cv2.COLOR_BGR2GRAY)
+    grayR = cv2.cvtColor(imgR,cv2.COLOR_BGR2GRAY)
 
     # grayL = cv2.equalizeHist(grayL)
     # grayR = cv2.equalizeHist(grayR)
+    grayL = sharpen(grayL)
+    grayR = sharpen(grayR)
 
-    # grayL = np.power(grayL, 0.75).astype('uint8');
-    # grayR = np.power(grayR, 0.75).astype('uint8');
+    grayL = np.power(grayL, 0.85).astype('uint8');
+    grayR = np.power(grayR, 0.85).astype('uint8');
 
     grayR = hist_match(grayR, grayL).astype(np.uint8)
 
@@ -190,7 +201,6 @@ for filename_left in left_file_list:
         # compute disparity image from undistorted and rectified stereo images
         # that we have loaded
         # (which for reasons best known to the OpenCV developers is returned scaled by 16)
-
         displ = left_matcher.compute(grayL, grayR)
 
         # filter out noise and speckles (adjust parameters as needed)
@@ -208,8 +218,6 @@ for filename_left in left_file_list:
 
         _, disparity = cv2.threshold(disparity,0, max_disparity * 16, cv2.THRESH_TOZERO);
         disparity_scaled = (disparity / 16.).astype(np.uint8);
-
-        cv2.imshow("disparity", (disparity_scaled * (256. / max_disparity)).astype(np.uint8));
 
         depths = depth_map(disparity_scaled, max_disparity)
 
@@ -229,42 +237,40 @@ for filename_left in left_file_list:
         for depth, class_name, confidence, left, top, right, bottom in tags:
             # construct label
             label = '%s (%.2fm)' % (class_name, depth)
-
             # draw a bounding box around matched section
             cv2.rectangle(imgL, (left, top), (right, bottom), (255, 178, 50), 2)
-
             # display the label at the top of the bounding box
             labelsize, baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_DUPLEX, 0.5, 1)
             top = max(top, labelsize[1])
-            cv2.rectangle(imgL, (left, top - round(1.5 * labelsize[1])),
-                          (left + round(1.5 * labelsize[0]), top + baseline), (255, 255, 255), cv2.FILLED)
+            cv2.rectangle(
+                imgL,
+                (left, top - round(1.5 * labelsize[1])),
+                (left + round(1.5 * labelsize[0]), top + baseline),
+                (255, 255, 255),
+                cv2.FILLED,
+            )
             cv2.putText(imgL, label, (left, top), cv2.FONT_HERSHEY_DUPLEX, 0.75, (0,0,0), 1)
 
         cv2.imshow('result', imgL)
 
-        # disparity_scaled = (disparity / 16.).astype(np.uint8);
-
-        # crop disparity to chop out left part where there are with no disparity
-        # as this area is not seen by both cameras and also
-        # chop out the bottom area (where we see the front of car bonnet)
-
         # display image (scaling it to the full 0->255 range based on the number
         # of disparities in use for the stereo part)
 
-        # cv2.imshow("disparity", (disparity_scaled * (256. / max_disparity)).astype(np.uint8));
+        disparity_display = (disparity_scaled * (256. / max_disparity)).astype(np.uint8)
+        cv2.imshow("disparity", disparity_display);
 
         # keyboard input for exit (as standard), save disparity and cropping
         # exit - x
         # save - s
-        # crop - c
         # pause - space
 
         key = cv2.waitKey(40 * (not(pause_playback))) & 0xFF; # wait 40ms (i.e. 1000ms / 25 fps = 40 ms)
         if (key == ord('x')):       # exit
             break; # exit
         elif (key == ord('s')):     # save
-            cv2.imwrite("left.png", imgL);
-            cv2.imwrite("right.png", imgR);
+            cv2.imwrite("left.png", imgL)
+            cv2.imwrite("right.png", imgR)
+            cv2.imwrite("disparity.png", disparity_display)
         elif (key == ord(' ')):     # pause (on next frame)
             pause_playback = not(pause_playback);
     else:

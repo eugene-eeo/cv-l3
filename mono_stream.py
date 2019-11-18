@@ -18,7 +18,7 @@
 
 import cv2
 import os
-import numpy as np
+# import numpy as np
 import csv
 import gyro     # local file gyro.py
 
@@ -26,7 +26,7 @@ import gyro     # local file gyro.py
 
 # where is the data ? - set this to where you have it
 
-master_path_to_dataset = "/tmp/TTBB-durham-02-10-17-sub5"; # ** need to edit this **
+master_path_to_dataset = "/home/eeojun/Downloads/TTBB-durham-02-10-17-sub10"; # ** need to edit this **
 directory_to_cycle = "left-images";     # edit this for left or right image set
 
 #####################################################################
@@ -72,14 +72,14 @@ if (os.path.isfile(gps_file_name)):
         gps_data = list(csv.DictReader(csvfileGPS));
         print("-- using GPS data file: " + gps_file_name);
 else:
-        print("-- GPS data file not found: " + gps_file_name);
+    print("-- GPS data file not found: " + gps_file_name);
 
 if (os.path.isfile(imu_file_name)):
     with open(imu_file_name, newline='') as csvfileIMU:
         imu_data = list(csv.DictReader(csvfileIMU));
         print("-- using IMU data file: " + imu_file_name);
 else:
-        print("-- IMU data file not found: " + imu_file_name);
+    print("-- IMU data file not found: " + imu_file_name);
 
 # get a list of the files, sort them (by timestamp in filename) and iterate
 
@@ -124,33 +124,33 @@ for index, filename in enumerate(sorted(os.listdir(full_path_directory))):
 
         if (len(gps_data) >= index):
             text = "GPS: lat.=%2f long.=%2f alt.=%2f"\
-                %(float(gps_data[index]['latitude']),
-                float(gps_data[index]['longitude']),
-                float(gps_data[index]['altitude']));
+                % (float(gps_data[index]['latitude']),
+                   float(gps_data[index]['longitude']),
+                   float(gps_data[index]['altitude']));
             cv2.putText(img, text, (20,40), cv2.FONT_HERSHEY_PLAIN, 1, (0,0,255), 1, 12)
 
         if (len(imu_data) >= index):
 
             roll, pitch, heading = gyro.gyro_to_angles(
-                        float(imu_data[index]['orientation_x']),
-                        float(imu_data[index]['orientation_y']),
-                        float(imu_data[index]['orientation_z']),
-                        float(imu_data[index]['orientation_w']));
+                float(imu_data[index]['orientation_x']),
+                float(imu_data[index]['orientation_y']),
+                float(imu_data[index]['orientation_z']),
+                float(imu_data[index]['orientation_w']));
 
             text = "IMU: roll/pitch/heading. (%2f, %2f, %2f) "\
-                %(roll, pitch, heading);
+                % (roll, pitch, heading);
             cv2.putText(img, text, (20,60), cv2.FONT_HERSHEY_PLAIN, 1, (0,0,255), 1, 12)
 
             text = "IMU: angular velocity (%2f, %2f, %2f)"\
-                %(float(imu_data[index]['angular_velocity_x']),
-                float(imu_data[index]['angular_velocity_y']),
-                float(imu_data[index]['angular_velocity_z']));
+                % (float(imu_data[index]['angular_velocity_x']),
+                   float(imu_data[index]['angular_velocity_y']),
+                   float(imu_data[index]['angular_velocity_z']));
             cv2.putText(img, text, (20,80), cv2.FONT_HERSHEY_PLAIN, 1, (0,0,255), 1, 12)
 
             text = "IMU: accel. (%2f, %2f, %2f)"\
-                %(float(imu_data[index]['linear_acceleration_x']),
-                float(imu_data[index]['linear_acceleration_y']),
-                float(imu_data[index]['linear_acceleration_z']));
+                % (float(imu_data[index]['linear_acceleration_x']),
+                   float(imu_data[index]['linear_acceleration_y']),
+                   float(imu_data[index]['linear_acceleration_z']));
             cv2.putText(img, text, (20,100), cv2.FONT_HERSHEY_PLAIN, 1, (0,0,255), 1, 12)
 
         # display the image
@@ -170,8 +170,8 @@ for index, filename in enumerate(sorted(os.listdir(full_path_directory))):
         elif (key == ord(' ')):     # pause (on next frame)
             pause_playback = not(pause_playback);
     else:
-            print("-- files skipped (perhaps one is missing or not PNG)");
-            print("\n");
+        print("-- files skipped (perhaps one is missing or not PNG)");
+        print("\n");
 
 # close all windows
 
