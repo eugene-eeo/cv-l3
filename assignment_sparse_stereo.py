@@ -17,6 +17,7 @@
 import cv2
 import os
 import numpy as np
+from utils import hist_match
 from surf import match, find_keypoints_and_descriptors
 from yolo2 import yolov3
 
@@ -66,16 +67,14 @@ def depth_map(shape, l_keypoints, l_descriptors, r_keypoints, r_descriptors):
     f = camera_focal_length_px
 
     for left_kp, right_kp in match(l_keypoints, l_descriptors, r_keypoints, r_descriptors):
+        # Left and right x and y values (indices into the image)
+        # respectively
         lx, ly = left_kp.pt
         rx, ry = right_kp.pt
 
-        plx = lx - image_centre_w
-        ply = ly - image_centre_h
-        prx = rx - image_centre_w
-        pry = ry - image_centre_h
-
-        d = ((plx - prx)**2 + (ply - pry)**2) ** 0.5
-        if d != 0:
+        # Calculate disparity (d = |P_L - P_R|)
+        d = ((lx - rx)**2 + (ly - ry)**2) ** 0.5
+        if d > 0:
             depths[int(ly), int(lx)] = f * B / d
     return depths
 
@@ -85,61 +84,16 @@ def get_distance(depth_map, bounding_box):
     return np.nanquantile(depth_map[y0:y1, x0:x1], 0.25)
 
 
-# Taken from https://stackoverflow.com/questions/32655686/histogram-matching-of-two-images-in-python-2-x
-def hist_match(source, template):
-    """
-    Adjust the pixel values of a grayscale image such that its histogram
-    matches that of a target image
-
-    Arguments:
-    -----------
-        source: np.ndarray
-            Image to transform; the histogram is computed over the flattened
-            array
-        template: np.ndarray
-            Template image; can have different dimensions to source
-    Returns:
-    -----------
-        matched: np.ndarray
-            The transformed output image
-    """
-
-    oldshape = source.shape
-    source = source.ravel()
-    template = template.ravel()
-
-    # get the set of unique pixel values and their corresponding indices and
-    # counts
-    s_values, bin_idx, s_counts = np.unique(source, return_inverse=True,
-                                            return_counts=True)
-    t_values, t_counts = np.unique(template, return_counts=True)
-
-    # take the cumsum of the counts and normalize by the number of pixels to
-    # get the empirical cumulative distribution functions for the source and
-    # template images (maps pixel value --> quantile)
-    s_quantiles = np.cumsum(s_counts).astype(np.float64)
-    s_quantiles /= s_quantiles[-1]
-    t_quantiles = np.cumsum(t_counts).astype(np.float64)
-    t_quantiles /= t_quantiles[-1]
-
-    # interpolate linearly to find the pixel values in the template image
-    # that correspond most closely to the quantiles in the source image
-    interp_t_values = np.interp(s_quantiles, t_quantiles, t_values)
-
-    return interp_t_values[bin_idx].reshape(oldshape)
-
-
-# Does preprocessing of the grayscale images
 def preprocess(imgL, imgR):
+    # Does preprocessing of the image pairs
     imgL = cv2.bilateralFilter(imgL, 5, 10, 20)
     imgR = cv2.bilateralFilter(imgR, 5, 10, 20)
 
     grayL = cv2.cvtColor(imgL,cv2.COLOR_BGR2GRAY)
     grayR = cv2.cvtColor(imgR,cv2.COLOR_BGR2GRAY)
 
-    # grayL = np.power(grayL, 0.85).astype('uint8');
-    # grayR = np.power(grayR, 0.85).astype('uint8');
-
+    grayL = np.power(grayL, 0.85).astype(np.uint8)
+    grayR = np.power(grayR, 0.85).astype(np.uint8)
     grayR = hist_match(grayR, grayL).astype(np.uint8)
 
     return grayL, grayR
@@ -178,6 +132,8 @@ for filename_left in left_file_list:
         imgL = cv2.imread(full_path_filename_left, cv2.IMREAD_COLOR)
         imgR = cv2.imread(full_path_filename_right, cv2.IMREAD_COLOR)
 
+        # Crop images so that the bonnet of the car isn't being
+        # processed; we don't need that region anyways.
         imgL = imgL[0:400,:]
         imgR = imgR[0:400,:]
 

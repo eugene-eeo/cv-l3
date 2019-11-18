@@ -17,8 +17,8 @@
 import cv2
 import os
 import numpy as np
-# from scipy import stats
 from yolo2 import yolov3
+from utils import sharpen, hist_match
 
 # where is the data ? - set this to where you have it
 
@@ -69,60 +69,11 @@ def get_distance(depth_map, bounding_box):
     x0, x1, y0, y1 = bounding_box
     return np.nanquantile(depth_map[y0:y1, x0:x1], 0.25)
 
-#####################################################################
 
-# Taken from https://stackoverflow.com/questions/32655686/histogram-matching-of-two-images-in-python-2-x
-def hist_match(source, template):
-    """
-    Adjust the pixel values of a grayscale image such that its histogram
-    matches that of a target image
-
-    Arguments:
-    -----------
-        source: np.ndarray
-            Image to transform; the histogram is computed over the flattened
-            array
-        template: np.ndarray
-            Template image; can have different dimensions to source
-    Returns:
-    -----------
-        matched: np.ndarray
-            The transformed output image
-    """
-
-    oldshape = source.shape
-    source = source.ravel()
-    template = template.ravel()
-
-    # get the set of unique pixel values and their corresponding indices and
-    # counts
-    s_values, bin_idx, s_counts = np.unique(source, return_inverse=True,
-                                            return_counts=True)
-    t_values, t_counts = np.unique(template, return_counts=True)
-
-    # take the cumsum of the counts and normalize by the number of pixels to
-    # get the empirical cumulative distribution functions for the source and
-    # template images (maps pixel value --> quantile)
-    s_quantiles = np.cumsum(s_counts).astype(np.float64)
-    s_quantiles /= s_quantiles[-1]
-    t_quantiles = np.cumsum(t_counts).astype(np.float64)
-    t_quantiles /= t_quantiles[-1]
-
-    # interpolate linearly to find the pixel values in the template image
-    # that correspond most closely to the quantiles in the source image
-    interp_t_values = np.interp(s_quantiles, t_quantiles, t_values)
-
-    return interp_t_values[bin_idx].reshape(oldshape)
-
-
-def sharpen(img):
-    kernel = np.array([[-1,-1,-1], [-1,9,-1], [-1,-1,-1]])
-    img = cv2.filter2D(img, -1, kernel)
-    return img
-
-
-# Does preprocessing of the grayscale images
 def preprocess(imgL, imgR):
+    # Does preprocessing of the colour images.
+    # The output is a pair of corresponding images in grayscale.
+
     imgL = cv2.bilateralFilter(imgL, 5, 50, 20)
     imgR = cv2.bilateralFilter(imgR, 5, 50, 20)
 
@@ -134,12 +85,14 @@ def preprocess(imgL, imgR):
     grayL = sharpen(grayL)
     grayR = sharpen(grayR)
 
-    grayL = np.power(grayL, 0.85).astype('uint8');
-    grayR = np.power(grayR, 0.85).astype('uint8');
+    grayL = np.power(grayL, 0.85).astype('uint8')
+    grayR = np.power(grayR, 0.85).astype('uint8')
 
     grayR = hist_match(grayR, grayL).astype(np.uint8)
 
     return grayL, grayR
+
+#####################################################################
 
 
 max_disparity = 64
@@ -193,8 +146,8 @@ for filename_left in left_file_list:
         # N.B. need to do for both as both are 3-channel images
         grayL, grayR = preprocess(imgL, imgR)
 
-        cv2.imshow('grayL', grayL)
-        cv2.imshow('grayR', grayR)
+        # cv2.imshow('grayL', grayL)
+        # cv2.imshow('grayR', grayR)
 
         # compute disparity image from undistorted and rectified stereo images
         # that we have loaded
@@ -263,6 +216,7 @@ for filename_left in left_file_list:
         # pause - space
 
         key = cv2.waitKey(40 * (not(pause_playback))) & 0xFF; # wait 40ms (i.e. 1000ms / 25 fps = 40 ms)
+        # key = cv2.waitKey(20)
         if (key == ord('x')):       # exit
             break; # exit
         elif (key == ord('s')):     # save
