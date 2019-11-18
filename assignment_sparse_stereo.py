@@ -17,8 +17,7 @@
 import cv2
 import os
 import numpy as np
-# from scipy import stats
-from surf import match
+from surf import match, find_keypoints_and_descriptors
 from yolo2 import yolov3
 
 # where is the data ? - set this to where you have it
@@ -60,13 +59,13 @@ left_file_list = sorted(os.listdir(full_path_directory_left));
 
 ## depth_map : compute depth map (in metres) for a given disparity image
 
-def depth_map(shape, imgL, imgR):
+def depth_map(shape, l_keypoints, l_descriptors, r_keypoints, r_descriptors):
     depths = np.full(shape, np.nan, dtype=np.float32)
 
     B = stereo_camera_baseline_m
     f = camera_focal_length_px
 
-    for left_kp, right_kp in match(imgL, imgR):
+    for left_kp, right_kp in match(l_keypoints, l_descriptors, r_keypoints, r_descriptors):
         lx, ly = left_kp.pt
         rx, ry = right_kp.pt
 
@@ -83,27 +82,65 @@ def depth_map(shape, imgL, imgR):
 
 def get_distance(depth_map, bounding_box):
     x0, x1, y0, y1 = bounding_box
-    return np.nanmean(depth_map[y0:y1, x0:x1])
-    # x, _ = stats.mode(depth_map[y0:y1, x0:x1], nan_policy='omit', axis=None)
-    # return x[0]
+    return np.nanquantile(depth_map[y0:y1, x0:x1], 0.25)
+
+
+# Taken from https://stackoverflow.com/questions/32655686/histogram-matching-of-two-images-in-python-2-x
+def hist_match(source, template):
+    """
+    Adjust the pixel values of a grayscale image such that its histogram
+    matches that of a target image
+
+    Arguments:
+    -----------
+        source: np.ndarray
+            Image to transform; the histogram is computed over the flattened
+            array
+        template: np.ndarray
+            Template image; can have different dimensions to source
+    Returns:
+    -----------
+        matched: np.ndarray
+            The transformed output image
+    """
+
+    oldshape = source.shape
+    source = source.ravel()
+    template = template.ravel()
+
+    # get the set of unique pixel values and their corresponding indices and
+    # counts
+    s_values, bin_idx, s_counts = np.unique(source, return_inverse=True,
+                                            return_counts=True)
+    t_values, t_counts = np.unique(template, return_counts=True)
+
+    # take the cumsum of the counts and normalize by the number of pixels to
+    # get the empirical cumulative distribution functions for the source and
+    # template images (maps pixel value --> quantile)
+    s_quantiles = np.cumsum(s_counts).astype(np.float64)
+    s_quantiles /= s_quantiles[-1]
+    t_quantiles = np.cumsum(t_counts).astype(np.float64)
+    t_quantiles /= t_quantiles[-1]
+
+    # interpolate linearly to find the pixel values in the template image
+    # that correspond most closely to the quantiles in the source image
+    interp_t_values = np.interp(s_quantiles, t_quantiles, t_values)
+
+    return interp_t_values[bin_idx].reshape(oldshape)
+
 
 # Does preprocessing of the grayscale images
 def preprocess(imgL, imgR):
-    imgL = cv2.bilateralFilter(imgL, 5, 50, 20)
-    imgR = cv2.bilateralFilter(imgR, 5, 50, 20)
+    imgL = cv2.bilateralFilter(imgL, 5, 10, 20)
+    imgR = cv2.bilateralFilter(imgR, 5, 10, 20)
 
     grayL = cv2.cvtColor(imgL,cv2.COLOR_BGR2GRAY)
     grayR = cv2.cvtColor(imgR,cv2.COLOR_BGR2GRAY)
 
-    # grayL = cv2.equalizeHist(grayL)
-    # grayR = cv2.equalizeHist(grayR)
-    # grayL = sharpen(grayL)
-    # grayR = sharpen(grayR)
-
     # grayL = np.power(grayL, 0.85).astype('uint8');
     # grayR = np.power(grayR, 0.85).astype('uint8');
 
-    # grayR = hist_match(grayR, grayL).astype(np.uint8)
+    grayR = hist_match(grayR, grayL).astype(np.uint8)
 
     return grayL, grayR
 
@@ -151,16 +188,17 @@ for filename_left in left_file_list:
         # N.B. need to do for both as both are 3-channel images
         grayL, grayR = preprocess(imgL, imgR)
 
-        cv2.imshow('grayL', grayL)
-        cv2.imshow('grayR', grayR)
-
         # scale the disparity to 8-bit for viewing
         # divide by 16 and convert to 8-bit image (then range of values should
         # be 0 -> max_disparity) but in fact is (-1 -> max_disparity - 1)
         # so we fix this also using a initial threshold between 0 and max_disparity
         # as disparity=-1 means no disparity available
 
-        depths = depth_map(grayL.shape, grayL, grayR)
+        l_keypoints, l_descriptors, r_keypoints, r_descriptors = find_keypoints_and_descriptors(grayL, grayR)
+        depths = depth_map(grayL.shape, l_keypoints, l_descriptors, r_keypoints, r_descriptors)
+
+        # grayL = cv2.drawKeypoints(grayL, l_keypoints, None, (73, 58, 215))
+        # grayR = cv2.drawKeypoints(grayR, r_keypoints, None, (73, 58, 215))
 
         tags = []
 
@@ -192,6 +230,8 @@ for filename_left in left_file_list:
             )
             cv2.putText(imgL, label, (left, top), cv2.FONT_HERSHEY_DUPLEX, 0.75, (0,0,0), 1)
 
+        # cv2.imshow('grayL', grayL)
+        # cv2.imshow('grayR', grayR)
         cv2.imshow('result', imgL)
 
         # keyboard input for exit (as standard), save disparity and cropping

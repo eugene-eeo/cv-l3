@@ -9,11 +9,14 @@ index_params = {"algorithm": FLANN_INDEX_LSH,
                 "multi_probe_level": 1}
 
 
-def match(grayL, grayR):
-    feature_object = cv2.ORB_create(1000)
+def find_keypoints_and_descriptors(grayL, grayR):
+    feature_object = cv2.ORB_create(5000)
     l_keypoints, l_descriptors = feature_object.detectAndCompute(grayL, None)
     r_keypoints, r_descriptors = feature_object.detectAndCompute(grayR, None)
+    return l_keypoints, l_descriptors, r_keypoints, r_descriptors
 
+
+def match(l_keypoints, l_descriptors, r_keypoints, r_descriptors):
     matcher = cv2.FlannBasedMatcher(index_params, {"checks": 50})
     matches = matcher.knnMatch(l_descriptors, trainDescriptors=r_descriptors, k=2)
     for m, n in matches:
