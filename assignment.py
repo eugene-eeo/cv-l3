@@ -18,7 +18,7 @@ import cv2
 import os
 import numpy as np
 from yolo2 import yolov3
-from utils import hist_match, annotate_image, kmeans
+from utils import annotate_image, kmeans, hist_match, USEFUL_NAMES
 
 # where is the data ? - set this to where you have it
 
@@ -75,8 +75,8 @@ def get_distance(depth_map, bounding_box):
         return np.nan
 
     classes, centroids = kmeans(depths, 2, [
-        np.percentile(depths, 25, interpolation='lower'),
-        np.percentile(depths, 80, interpolation='lower'),
+        np.percentile(depths, 25),
+        np.percentile(depths, 80),
     ], maxiter=5)
     i = centroids.index(min(centroids))
     depths = depths[classes == i]
@@ -98,12 +98,11 @@ def preprocess(imgL, imgR):
     # grayL = sharpen(grayL)
     # grayR = sharpen(grayR)
 
-    grayL = np.power(grayL, 0.85).astype('uint8')
-    grayR = np.power(grayR, 0.85).astype('uint8')
+    grayR = hist_match(grayR, grayL)
+    grayL = np.power(grayL, 0.75)
+    grayR = np.power(grayR, 0.75)
 
-    grayR = hist_match(grayR, grayL).astype(np.uint8)
-
-    return grayL, grayR
+    return np.uint8(grayL), np.uint8(grayR)
 
 #####################################################################
 
@@ -159,9 +158,6 @@ for filename_left in left_file_list:
         # N.B. need to do for both as both are 3-channel images
         grayL, grayR = preprocess(imgL, imgR)
 
-        # cv2.imshow('grayL', grayL)
-        # cv2.imshow('grayR', grayR)
-
         # compute disparity image from undistorted and rectified stereo images
         # that we have loaded
         # (which for reasons best known to the OpenCV developers is returned scaled by 16)
@@ -186,8 +182,15 @@ for filename_left in left_file_list:
         depths = depth_map(disparity_scaled, max_disparity)
 
         tags = []
+        # Perform YUV equalisation to try to improve YOLO performance
+        # imgL_yuv = cv2.cvtColor(imgL, cv2.COLOR_BGR2YUV)
+        # imgL_yuv[:, :, 0] = cv2.equalizeHist(imgL_yuv[:, :, 0])
+        # imgL = cv2.cvtColor(imgL_yuv, cv2.COLOR_YUV2BGR)
+        yolo_matches = yolov3(imgL)
 
-        for class_name, confidence, left, top, right, bottom in yolov3(imgL):
+        for class_name, confidence, left, top, right, bottom in yolo_matches:
+            if class_name not in USEFUL_NAMES:
+                continue
             # depth = np.nanmedian(depths[top:bottom,max(left, 0):right])
             depth = get_distance(depths, (max(left, 0), right, top, bottom))
             if np.isnan(depth):
@@ -212,16 +215,16 @@ for filename_left in left_file_list:
         # save - s
         # pause - space
 
-        key = cv2.waitKey(40 * (not(pause_playback))) & 0xFF; # wait 40ms (i.e. 1000ms / 25 fps = 40 ms)
-        # key = cv2.waitKey(20)
-        if (key == ord('x')):       # exit
-            break; # exit
-        elif (key == ord('s')):     # save
-            cv2.imwrite("left.png", imgL)
-            cv2.imwrite("right.png", imgR)
-            cv2.imwrite("disparity.png", disparity_display)
-        elif (key == ord(' ')):     # pause (on next frame)
-            pause_playback = not(pause_playback);
+        cv2.waitKey(20)
+        # key = cv2.waitKey(40 * (not(pause_playback))) & 0xFF; # wait 40ms (i.e. 1000ms / 25 fps = 40 ms)
+        # if (key == ord('x')):       # exit
+        #     break; # exit
+        # elif (key == ord('s')):     # save
+        #     cv2.imwrite("left.png", imgL)
+        #     cv2.imwrite("right.png", imgR)
+        #     cv2.imwrite("disparity.png", disparity_display)
+        # elif (key == ord(' ')):     # pause (on next frame)
+        #     pause_playback = not(pause_playback);
     else:
         print("-- files skipped (perhaps one is missing or not PNG)");
         print();

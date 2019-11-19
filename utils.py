@@ -34,9 +34,9 @@ def hist_match(source, template):
     # take the cumsum of the counts and normalize by the number of pixels to
     # get the empirical cumulative distribution functions for the source and
     # template images (maps pixel value --> quantile)
-    s_quantiles = np.cumsum(s_counts).astype(np.float64)
+    s_quantiles = np.cumsum(s_counts).astype(np.float32)
     s_quantiles /= s_quantiles[-1]
-    t_quantiles = np.cumsum(t_counts).astype(np.float64)
+    t_quantiles = np.cumsum(t_counts).astype(np.float32)
     t_quantiles /= t_quantiles[-1]
 
     # interpolate linearly to find the pixel values in the template image
@@ -62,7 +62,7 @@ def annotate_image(tags, img):
         label = '%s (%.2fm)' % (class_name, depth)
 
         # draw a bounding box around matched section
-        cv2.rectangle(img, (left, top), (right, bottom), (255, 178, 50), 2)
+        cv2.rectangle(img, (left, top), (right, bottom), (0, 0, 255), 2)
 
         # display the label at the top of the bounding box
         labelsize, baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_DUPLEX, fontScale=0.5, thickness=1)
@@ -83,7 +83,7 @@ def kmeans(points, k, priors, maxiter=20):
     # centroid guesses.
     centroids = priors
     classes = np.zeros(points.shape[0], dtype=np.uint8)
-    distances = np.zeros([points.shape[0], k], dtype=np.float64)
+    distances = np.zeros([points.shape[0], k], dtype=np.float32)
 
     for _ in range(maxiter):
         for i, c in enumerate(centroids):
@@ -93,3 +93,18 @@ def kmeans(points, k, priors, maxiter=20):
         for c in range(k):
             centroids[c] = np.mean(points[classes == c], 0)
     return classes, centroids
+
+
+USEFUL_NAMES = {
+    'person',
+    'bicycle',
+    'car',
+    'motorbike',
+    'aeroplane',
+    'bus',
+    'train',
+    'truck',
+    'boat',
+    'parking meter',
+    'skateboard',
+}

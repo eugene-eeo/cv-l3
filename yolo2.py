@@ -31,38 +31,10 @@ import numpy as np
 
 ################################################################################
 
-keep_processing = True
-
 # parse command line arguments for camera ID or video file, and YOLO files
 classes_file = 'coco.names'
 config_file = 'yolov3.cfg'
 weights_file = 'yolov3.weights'
-
-################################################################################
-# dummy on trackbar callback function
-def on_trackbar(val):
-    return
-
-#####################################################################
-# Draw the predicted bounding box on the specified image
-# image: image detection performed on
-# class_name: string name of detected object_detection
-# left, top, right, bottom: rectangle parameters for detection
-# colour: to draw detection rectangle in
-
-def drawPred(image, class_name, confidence, left, top, right, bottom, colour):
-    # draw a bounding box.
-    cv2.rectangle(image, (left, top), (right, bottom), colour, 3)
-
-    # construct label
-    label = '%s:%.2f' % (class_name, confidence)
-
-    # display the label at the top of the bounding box
-    labelsize, baseline = cv2.gettextsize(label, cv2.font_hershey_simplex, 0.5, 1)
-    top = max(top, labelsize[1])
-    cv2.rectangle(image, (left, top - round(1.5 * labelsize[1])),
-                  (left + round(1.5 * labelsize[0]), top + baseline), (255, 255, 255), cv2.filled)
-    cv2.puttext(image, label, (left, top), cv2.font_hershey_simplex, 0.75, (0,0,0), 1)
 
 #####################################################################
 # Remove the bounding boxes with low confidence using non-maxima suppression
@@ -189,12 +161,3 @@ def yolov3(frame):
             left + width,
             top + height,
         )
-
-    # draw resulting detections on image
-    # for detected_object in range(0, len(boxes)):
-    #    box = boxes[detected_object]
-    #    left = box[0]
-    #    top = box[1]
-    #    width = box[2]
-    #    height = box[3]
-    #    drawPred(frame, classes[classIDs[detected_object]], confidences[detected_object], left, top, left + width, top + height, (255, 178, 50))
