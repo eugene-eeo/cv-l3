@@ -46,11 +46,10 @@ def hist_match(source, template):
     return interp_t_values[bin_idx].reshape(shape)
 
 
-def sharpen(img):
+def sharpen(img, dst=None):
     # Convolves an image with the edge-sharpening filter.
     kernel = np.array([[-1,-1,-1], [-1,9,-1], [-1,-1,-1]])
-    img = cv2.filter2D(img, -1, kernel)
-    return img
+    return cv2.filter2D(img, -1, kernel, dst=dst)
 
 
 def annotate_image(tags, img):
@@ -77,11 +76,12 @@ def annotate_image(tags, img):
         cv2.putText(img, label, (left, top - 2), cv2.FONT_HERSHEY_DUPLEX, fontScale=0.75, color=(0,0,0), thickness=1)
 
 
-def kmeans(points, k, priors, maxiter=20):
+def kmeans(points, priors, maxiter=20):
     # Perform k-means on a 1D-array of points
     # Where number of centroids is k, and priors is a list of
     # centroid guesses.
 
+    k = priors.shape[0]
     centroids = np.array(priors, dtype=np.float32).reshape(-1, 1)
     classes = np.zeros(points.shape[0], dtype=np.uint8)
     distances = np.zeros((k, points.shape[0]), dtype=np.float32)
