@@ -86,16 +86,12 @@ def get_distance(depth_map, bounding_box):
 
 def preprocess(imgL, imgR):
     # Does preprocessing of the image pairs
-    imgL = cv2.bilateralFilter(imgL, 5, 10, 20)
-    imgR = cv2.bilateralFilter(imgR, 5, 10, 20)
-
     grayL = cv2.cvtColor(imgL,cv2.COLOR_BGR2GRAY)
     grayR = cv2.cvtColor(imgR,cv2.COLOR_BGR2GRAY)
 
     grayL = np.power(grayL, 0.85).astype(np.uint8)
     grayR = np.power(grayR, 0.85).astype(np.uint8)
     grayR = hist_match(grayR, grayL).astype(np.uint8)
-
     return grayL, grayR
 
 

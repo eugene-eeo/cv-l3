@@ -75,3 +75,21 @@ def annotate_image(tags, img):
             cv2.FILLED,
         )
         cv2.putText(img, label, (left, top - 2), cv2.FONT_HERSHEY_DUPLEX, fontScale=0.75, color=(0,0,0), thickness=1)
+
+
+def kmeans(points, k, priors, maxiter=20):
+    # Perform k-means on a 1D-array of points
+    # Where number of centroids is k, and priors is a list of
+    # centroid guesses.
+    centroids = priors
+    classes = np.zeros(points.shape[0], dtype=np.uint8)
+    distances = np.zeros([points.shape[0], k], dtype=np.float64)
+
+    for _ in range(maxiter):
+        for i, c in enumerate(centroids):
+            distances[:, i] = (c - points)**2
+
+        classes = np.argmin(distances, axis=1)
+        for c in range(k):
+            centroids[c] = np.mean(points[classes == c], 0)
+    return classes, centroids

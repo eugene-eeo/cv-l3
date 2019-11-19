@@ -18,7 +18,7 @@ import cv2
 import os
 import numpy as np
 from yolo2 import yolov3
-from utils import sharpen, hist_match, annotate_image
+from utils import hist_match, annotate_image, kmeans
 
 # where is the data ? - set this to where you have it
 
@@ -67,26 +67,39 @@ def depth_map(disparity, max_disparity):
 
 def get_distance(depth_map, bounding_box):
     x0, x1, y0, y1 = bounding_box
-    return np.nanquantile(depth_map[y0:y1, x0:x1], 0.25)
+    depths = depth_map[y0:y1, x0:x1].ravel()
+    depths = depths[~np.isnan(depths)]
+
+    # Avoid error in percentile computation
+    if len(depths) == 0:
+        return np.nan
+
+    classes, centroids = kmeans(depths, 2, [
+        np.percentile(depths, 25, interpolation='lower'),
+        np.percentile(depths, 80, interpolation='lower'),
+    ], maxiter=5)
+    i = centroids.index(min(centroids))
+    depths = depths[classes == i]
+    return np.median(depths)
 
 
 def preprocess(imgL, imgR):
     # Does preprocessing of the colour images.
     # The output is a pair of corresponding images in grayscale.
 
-    imgL = cv2.bilateralFilter(imgL, 5, 50, 20)
-    imgR = cv2.bilateralFilter(imgR, 5, 50, 20)
+    # imgL = cv2.bilateralFilter(imgL, 5, 50, 20)
+    # imgR = cv2.bilateralFilter(imgR, 5, 50, 20)
 
     grayL = cv2.cvtColor(imgL,cv2.COLOR_BGR2GRAY)
     grayR = cv2.cvtColor(imgR,cv2.COLOR_BGR2GRAY)
 
     # grayL = cv2.equalizeHist(grayL)
     # grayR = cv2.equalizeHist(grayR)
-    grayL = sharpen(grayL)
-    grayR = sharpen(grayR)
+    # grayL = sharpen(grayL)
+    # grayR = sharpen(grayR)
 
-    # grayL = np.power(grayL, 0.85).astype('uint8')
-    # grayR = np.power(grayR, 0.85).astype('uint8')
+    grayL = np.power(grayL, 0.85).astype('uint8')
+    grayR = np.power(grayR, 0.85).astype('uint8')
 
     grayR = hist_match(grayR, grayL).astype(np.uint8)
 
@@ -192,7 +205,7 @@ for filename_left in left_file_list:
         # of disparities in use for the stereo part)
 
         disparity_display = (disparity_scaled * (256. / max_disparity)).astype(np.uint8)
-        cv2.imshow("disparity", disparity_display);
+        cv2.imshow("disparity", disparity_display)
 
         # keyboard input for exit (as standard), save disparity and cropping
         # exit - x
@@ -215,6 +228,7 @@ for filename_left in left_file_list:
 
 # close all windows
 
+cv2.waitKey()
 cv2.destroyAllWindows()
 
 #####################################################################
