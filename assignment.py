@@ -67,6 +67,7 @@ def depth_map(disparity, max_disparity):
 
 def get_distance(depth_map, bounding_box):
     x0, x1, y0, y1 = bounding_box
+    # Get an array of non-nan depths
     depths = depth_map[y0:y1, x0:x1].ravel()
     depths = depths[~np.isnan(depths)]
 
@@ -74,12 +75,16 @@ def get_distance(depth_map, bounding_box):
     if len(depths) == 0:
         return np.nan
 
+    # Perform k-means with 2 clusters -- these should
+    # help us find the foreground and background depth information.
+    # Can tweak maxiter and the 25 and 80-th percentiles.
     classes, centroids = kmeans(depths, 2, [
         np.percentile(depths, 25),
         np.percentile(depths, 80),
     ], maxiter=5)
-    i = centroids.index(min(centroids))
-    depths = depths[classes == i]
+
+    # Take only depth data from the foreground
+    depths = depths[classes == centroids.argmin()]
     return np.median(depths)
 
 
@@ -182,7 +187,7 @@ for filename_left in left_file_list:
         depths = depth_map(disparity_scaled, max_disparity)
 
         tags = []
-        # Perform YUV equalisation to try to improve YOLO performance
+        # Perform YUV equalisation to try to improve
         # imgL_yuv = cv2.cvtColor(imgL, cv2.COLOR_BGR2YUV)
         # imgL_yuv[:, :, 0] = cv2.equalizeHist(imgL_yuv[:, :, 0])
         # imgL = cv2.cvtColor(imgL_yuv, cv2.COLOR_YUV2BGR)

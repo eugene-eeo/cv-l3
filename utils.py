@@ -81,18 +81,24 @@ def kmeans(points, k, priors, maxiter=20):
     # Perform k-means on a 1D-array of points
     # Where number of centroids is k, and priors is a list of
     # centroid guesses.
-    centroids = priors
+
+    centroids = np.array(priors, dtype=np.float32).reshape(-1, 1)
     classes = np.zeros(points.shape[0], dtype=np.uint8)
-    distances = np.zeros([points.shape[0], k], dtype=np.float32)
+    distances = np.zeros((k, points.shape[0]), dtype=np.float32)
+
+    # distances is used as follows:
+    # D = [ p1 p2 p3 ... pn  | for centroid 1
+    #       p1 p2 p3 ... pn  | for centroid 2
 
     for _ in range(maxiter):
-        for i, c in enumerate(centroids):
-            distances[:, i] = (c - points)**2
-
-        classes = np.argmin(distances, axis=1)
+        # Distance function = (point - centroid)^2
+        distances[:] = points
+        distances -= centroids
+        distances **= 2
+        classes = np.argmin(distances, axis=0)
         for c in range(k):
-            centroids[c] = np.mean(points[classes == c], 0)
-    return classes, centroids
+            centroids[c] = np.mean(points[classes == c])
+    return classes, centroids.ravel()
 
 
 USEFUL_NAMES = {
