@@ -129,15 +129,15 @@ for filename_left in left_file_list:
 
     # from the left image filename get the correspondoning right image
 
-    filename_right = filename_left.replace("_L", "_R");
-    full_path_filename_left = os.path.join(full_path_directory_left, filename_left);
-    full_path_filename_right = os.path.join(full_path_directory_right, filename_right);
+    filename_right = filename_left.replace("_L", "_R")
+    full_path_filename_left = os.path.join(full_path_directory_left, filename_left)
+    full_path_filename_right = os.path.join(full_path_directory_right, filename_right)
 
     # for sanity print out these filenames
 
-    print(full_path_filename_left);
-    print(full_path_filename_right);
-    print();
+    print(full_path_filename_left)
+    print(full_path_filename_right)
+    print()
 
     # check the file is a PNG file (left) and check a correspondoning right image
     # actually exists
@@ -154,8 +154,8 @@ for filename_left in left_file_list:
         imgL = imgL[0:400,:]
         imgR = imgR[0:400,:]
 
-        print("-- files loaded successfully");
-        print();
+        print("-- files loaded successfully")
+        print()
 
         # remember to convert to grayscale (as the disparity matching works on grayscale)
         # N.B. need to do for both as both are 3-channel images
@@ -165,22 +165,21 @@ for filename_left in left_file_list:
         # that we have loaded
         # (which for reasons best known to the OpenCV developers is returned scaled by 16)
         displ = left_matcher.compute(grayL, grayR)
-
-        # filter out noise and speckles (adjust parameters as needed)
-
-        # dispNoiseFilter = 10; # increase for more agressive filtering
-        # cv2.filterSpeckles(disparity, 0, 4000, max_disparity - dispNoiseFilter);
         dispr = right_matcher.compute(grayR, grayL)
         disparity = wls_filter.filter(displ, imgL, None, dispr)
 
-        # scale the disparity to 8-bit for viewing
+        # filter out noise and speckles (adjust parameters as needed)
+
+        # dispNoiseFilter = 5; # increase for more agressive filtering
+        # cv2.filterSpeckles(disparity, 0, 4000, max_disparity - dispNoiseFilter)
+
         # divide by 16 and convert to 8-bit image (then range of values should
         # be 0 -> max_disparity) but in fact is (-1 -> max_disparity - 1)
         # so we fix this also using a initial threshold between 0 and max_disparity
         # as disparity=-1 means no disparity available
 
-        _, disparity = cv2.threshold(disparity,0, max_disparity * 16, cv2.THRESH_TOZERO);
-        disparity_scaled = (disparity / 16.).astype(np.uint8);
+        _, disparity = cv2.threshold(disparity, 0, max_disparity * 16, cv2.THRESH_TOZERO)
+        disparity_scaled = (disparity / 16.).astype(np.uint8)
 
         depths = depth_map(disparity_scaled, max_disparity)
 
@@ -228,10 +227,10 @@ for filename_left in left_file_list:
             cv2.imwrite("right.png", imgR)
             cv2.imwrite("disparity.png", disparity_display)
         elif (key == ord(' ')):     # pause (on next frame)
-            pause_playback = not(pause_playback);
+            pause_playback = not(pause_playback)
     else:
-        print("-- files skipped (perhaps one is missing or not PNG)");
-        print();
+        print("-- files skipped (perhaps one is missing or not PNG)")
+        print()
 
 # close all windows
 

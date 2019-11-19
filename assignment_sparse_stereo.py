@@ -65,6 +65,7 @@ def depth_map(shape, l_keypoints, l_descriptors, r_keypoints, r_descriptors):
 
     B = stereo_camera_baseline_m
     f = camera_focal_length_px
+    m = f * B
 
     for left_kp, right_kp in match(l_keypoints, l_descriptors, r_keypoints, r_descriptors):
         # Left and right x and y values (indices into the image)
@@ -75,13 +76,13 @@ def depth_map(shape, l_keypoints, l_descriptors, r_keypoints, r_descriptors):
         # Calculate disparity (d = |P_L - P_R|)
         d = ((lx - rx)**2 + (ly - ry)**2) ** 0.5
         if d > 0:
-            depths[int(ly), int(lx)] = f * B / d
+            depths[int(ly), int(lx)] = m / d
     return depths
 
 
 def get_distance(depth_map, bounding_box):
     x0, x1, y0, y1 = bounding_box
-    return np.nanquantile(depth_map[y0:y1, x0:x1], 0.25)
+    return np.nanpercentile(depth_map[y0:y1, x0:x1], 25)
 
 
 def preprocess(imgL, imgR):
