@@ -18,7 +18,7 @@ import cv2
 import os
 import numpy as np
 from yolo2 import yolov3
-from utils import sharpen, hist_match
+from utils import sharpen, hist_match, annotate_image
 
 # where is the data ? - set this to where you have it
 
@@ -85,8 +85,8 @@ def preprocess(imgL, imgR):
     grayL = sharpen(grayL)
     grayR = sharpen(grayR)
 
-    grayL = np.power(grayL, 0.85).astype('uint8')
-    grayR = np.power(grayR, 0.85).astype('uint8')
+    # grayL = np.power(grayL, 0.85).astype('uint8')
+    # grayR = np.power(grayR, 0.85).astype('uint8')
 
     grayR = hist_match(grayR, grayL).astype(np.uint8)
 
@@ -185,23 +185,7 @@ for filename_left in left_file_list:
         # Sort by z (depth) so we draw the back labels first
         tags.sort(reverse=True)
 
-        for depth, class_name, confidence, left, top, right, bottom in tags:
-            # construct label
-            label = '%s (%.2fm)' % (class_name, depth)
-            # draw a bounding box around matched section
-            cv2.rectangle(imgL, (left, top), (right, bottom), (255, 178, 50), 2)
-            # display the label at the top of the bounding box
-            labelsize, baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_DUPLEX, 0.5, 1)
-            top = max(top, labelsize[1])
-            cv2.rectangle(
-                imgL,
-                (left, top - round(1.5 * labelsize[1])),
-                (left + round(1.5 * labelsize[0]), top + baseline),
-                (255, 255, 255),
-                cv2.FILLED,
-            )
-            cv2.putText(imgL, label, (left, top), cv2.FONT_HERSHEY_DUPLEX, 0.75, (0,0,0), 1)
-
+        annotate_image(tags, imgL)
         cv2.imshow('result', imgL)
 
         # display image (scaling it to the full 0->255 range based on the number
