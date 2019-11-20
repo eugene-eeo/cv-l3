@@ -57,19 +57,15 @@ left_file_list = sorted(os.listdir(full_path_directory_left));
 
 #####################################################################
 
-## depth_map : compute depth map (in metres) for a given disparity image
-
-def depth_map(disparity, max_disparity):
+def get_distance(disparities, bounding_box):
+    # Get distance from disparities and bounding_box
     f = camera_focal_length_px
     B = stereo_camera_baseline_m
-    return np.where(disparity > 0, (f * B) / disparity, np.nan)
 
-
-def get_distance(depth_map, bounding_box):
     x0, x1, y0, y1 = bounding_box
-    # Get an array of non-nan depths
-    depths = depth_map[y0:y1, x0:x1].ravel()
-    depths = depths[~np.isnan(depths)]
+    # Get an array of non-zero depths
+    depths = disparities[y0:y1, x0:x1].ravel()
+    depths = (f * B) / depths[depths > 0]
 
     # Avoid error in percentile computation
     if len(depths) == 0:
@@ -84,9 +80,16 @@ def get_distance(depth_map, bounding_box):
         maxiter=5,
     )
 
-    # Take only depth data from the foreground
-    depths = depths[classes == centroids.argmin()]
-    return np.median(depths)
+    # Take only depth data from the 'foreground'
+    # Foreground depths tend to be smaller, so we go through the
+    # clusters according to their centroid (smallest to largest).
+    centroids = [(c, i) for i, c in enumerate(centroids)]
+    centroids.sort()
+    for _, i in centroids:
+        cluster = depths[classes == i]
+        if len(cluster) > 0:
+            return np.median(cluster)
+    return np.nan
 
 
 def preprocess(imgL, imgR):
@@ -179,22 +182,14 @@ for filename_left in left_file_list:
         # as disparity=-1 means no disparity available
 
         _, disparity = cv2.threshold(disparity, 0, max_disparity * 16, cv2.THRESH_TOZERO)
-        disparity_scaled = (disparity / 16.).astype(np.uint8)
-
-        depths = depth_map(disparity_scaled, max_disparity)
+        disparity_scaled = (disparity / 16.0).astype(np.uint8)
 
         tags = []
-        # Perform YUV equalisation to try to improve
-        # imgL_yuv = cv2.cvtColor(imgL, cv2.COLOR_BGR2YUV)
-        # imgL_yuv[:, :, 0] = cv2.equalizeHist(imgL_yuv[:, :, 0])
-        # imgL = cv2.cvtColor(imgL_yuv, cv2.COLOR_YUV2BGR)
-        yolo_matches = yolov3(imgL)
-
-        for class_name, confidence, left, top, right, bottom in yolo_matches:
+        for class_name, confidence, left, top, right, bottom in yolov3(imgL):
             if class_name not in USEFUL_NAMES:
                 continue
             # depth = np.nanmedian(depths[top:bottom,max(left, 0):right])
-            depth = get_distance(depths, (max(left, 0), right, top, bottom))
+            depth = get_distance(disparity_scaled, (max(left, 0), right, top, bottom))
             if np.isnan(depth):
                 continue
 
@@ -205,8 +200,8 @@ for filename_left in left_file_list:
 
         annotate_image(tags, imgL)
         cv2.imshow('result', imgL)
-        cv2.imshow('grayL', grayL)
-        cv2.imshow('grayR', grayR)
+        # cv2.imshow('grayL', grayL)
+        # cv2.imshow('grayR', grayR)
 
         # display image (scaling it to the full 0->255 range based on the number
         # of disparities in use for the stereo part)
