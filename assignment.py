@@ -1,24 +1,9 @@
-#####################################################################
-
-# Example : load, display and compute SGBM disparity
-# for a set of rectified stereo images from a  directory structure
-# of left-images / right-images with filesname DATE_TIME_STAMP_{L|R}.png
-
-# basic illustrative python script for use with provided stereo datasets
-
-# Author : Toby Breckon, toby.breckon@durham.ac.uk
-
-# Copyright (c) 2017 Department of Computer Science,
-#                    Durham University, UK
-# License : LGPL - http://www.gnu.org/licenses/lgpl.html
-
-#####################################################################
-
 import cv2
 import os
+import statistics
 import numpy as np
 from yolo2 import yolov3
-from utils import annotate_image, kmeans, hist_match, USEFUL_NAMES, sharpen
+from utils import annotate_image, hist_match, USEFUL_NAMES, sharpen
 
 # where is the data ? - set this to where you have it
 
@@ -40,9 +25,10 @@ image_centre_w = 474.5;
 # set this to a file timestamp to start from (empty is first example - outside lab)
 # e.g. set to 1506943191.487683 for the end of the Bailey, just as the vehicle turns
 
-skip_forward_file_pattern = ""; # set to timestamp to skip forward to
+# skip_forward_file_pattern = "1506943191.487683"; # set to timestamp to skip forward to
+skip_forward_file_pattern = "";
 
-pause_playback = True; # pause until key press after each image
+pause_playback = False; # pause until key press after each image
 
 #####################################################################
 
@@ -57,7 +43,9 @@ left_file_list = sorted(os.listdir(full_path_directory_left));
 
 #####################################################################
 
-def get_distance(disparities, bounding_box):
+
+def get_distance_otsu(disparities, bounding_box):
+    # Uses Otsu thresholding
     # Get distance from disparities and bounding_box
     f = camera_focal_length_px
     B = stereo_camera_baseline_m
@@ -65,31 +53,15 @@ def get_distance(disparities, bounding_box):
     x0, x1, y0, y1 = bounding_box
     # Get an array of non-zero depths
     depths = disparities[y0:y1, x0:x1].ravel()
-    depths = (f * B) / depths[depths > 0]
-
-    # Avoid error in percentile computation
+    depths = depths[depths > 0]
     if len(depths) == 0:
         return np.nan
 
-    # Perform k-means with 2 clusters -- these should
-    # help us find the foreground and background depth information.
-    # Can tweak maxiter and the 25 and 80-th percentiles.
-    classes, centroids = kmeans(
-        depths,
-        np.percentile(depths, [30, 70], interpolation='lower'),
-        maxiter=5,
-    )
-
-    # Take only depth data from the 'foreground'
-    # Foreground depths tend to be smaller, so we go through the
-    # clusters according to their centroid (smallest to largest).
-    centroids = [(c, i) for i, c in enumerate(centroids)]
-    centroids.sort()
-    for _, i in centroids:
-        cluster = depths[classes == i]
-        if len(cluster) > 0:
-            return np.median(cluster)
-    return np.nan
+    ret, _ = cv2.threshold(depths, 0, max_disparity, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    depths = depths[depths > ret]
+    # Be conservative here, we take the maximum disparity =>
+    # minimum depth between the mode and the median.
+    return (f * B) / max(np.median(depths), statistics.mode(depths))
 
 
 def preprocess(imgL, imgR):
@@ -113,7 +85,7 @@ def preprocess(imgL, imgR):
 #####################################################################
 
 
-max_disparity = 64
+max_disparity = 128
 left_matcher = cv2.StereoSGBM_create(0, max_disparity, 21)
 right_matcher = cv2.ximgproc.createRightMatcher(left_matcher)
 wls_filter = cv2.ximgproc.createDisparityWLSFilter(matcher_left=left_matcher)
@@ -189,7 +161,7 @@ for filename_left in left_file_list:
             if class_name not in USEFUL_NAMES:
                 continue
             # depth = np.nanmedian(depths[top:bottom,max(left, 0):right])
-            depth = get_distance(disparity_scaled, (max(left, 0), right, top, bottom))
+            depth = get_distance_otsu(disparity_scaled, (max(left, 0), right, top, bottom))
             if np.isnan(depth):
                 continue
 
