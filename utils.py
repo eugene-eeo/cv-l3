@@ -76,31 +76,6 @@ def annotate_image(tags, img):
         cv2.putText(img, label, (left, top - 2), cv2.FONT_HERSHEY_DUPLEX, fontScale=0.75, color=(0,0,0), thickness=1)
 
 
-def kmeans(points, priors, maxiter=20):
-    # Perform k-means on a 1D-array of points
-    # Where number of centroids is k, and priors is a list of
-    # centroid guesses.
-
-    k = priors.shape[0]
-    centroids = np.array(priors, dtype=np.float32).reshape(-1, 1)
-    classes = np.zeros(points.shape[0], dtype=np.uint8)
-    distances = np.zeros((k, points.shape[0]), dtype=np.float32)
-
-    # distances is used as follows:
-    # D = [ p1 p2 p3 ... pn  | for centroid 1
-    #       p1 p2 p3 ... pn  | for centroid 2
-
-    for _ in range(maxiter):
-        # Distance function = (point - centroid)^2
-        distances[:] = points
-        distances -= centroids
-        distances **= 2
-        classes = np.argmin(distances, axis=0)
-        for c in range(k):
-            centroids[c] = np.mean(points[classes == c])
-    return classes, centroids.ravel()
-
-
 USEFUL_NAMES = {
     'person',
     'bicycle',
