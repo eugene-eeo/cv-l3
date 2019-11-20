@@ -42,7 +42,7 @@ image_centre_w = 474.5;
 
 skip_forward_file_pattern = ""; # set to timestamp to skip forward to
 
-pause_playback = False; # pause until key press after each image
+pause_playback = True; # pause until key press after each image
 
 #####################################################################
 
@@ -76,7 +76,7 @@ def get_distance(disparities, bounding_box):
     # Can tweak maxiter and the 25 and 80-th percentiles.
     classes, centroids = kmeans(
         depths,
-        np.percentile(depths, [25, 80], interpolation='lower'),
+        np.percentile(depths, [30, 70], interpolation='lower'),
         maxiter=5,
     )
 
