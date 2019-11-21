@@ -17,7 +17,7 @@
 import cv2
 import os
 import numpy as np
-from utils import hist_match, annotate_image
+from utils import hist_match, annotate_image, USEFUL_NAMES
 from surf import match, find_keypoints_and_descriptors
 from yolo2 import yolov3
 
@@ -58,9 +58,9 @@ left_file_list = sorted(os.listdir(full_path_directory_left));
 
 #####################################################################
 
-## depth_map : compute depth map (in metres) for a given disparity image
-
 def depth_map(shape, l_keypoints, l_descriptors, r_keypoints, r_descriptors):
+    # Computes a depth map of a given shape in metres, given the ORB feature
+    # point matches.
     depths = np.full(shape, np.nan, dtype=np.float32)
 
     B = stereo_camera_baseline_m
@@ -82,7 +82,7 @@ def depth_map(shape, l_keypoints, l_descriptors, r_keypoints, r_descriptors):
 
 def get_distance(depth_map, bounding_box):
     x0, x1, y0, y1 = bounding_box
-    return np.nanpercentile(depth_map[y0:y1, x0:x1], 25)
+    return np.nanmedian(depth_map[y0:y1, x0:x1])
 
 
 def preprocess(imgL, imgR):
@@ -157,6 +157,8 @@ for filename_left in left_file_list:
 
         for class_name, confidence, left, top, right, bottom in yolov3(imgL):
             # depth = np.nanmedian(depths[top:bottom,max(left, 0):right])
+            if class_name not in USEFUL_NAMES:
+                continue
             depth = get_distance(depths, (max(left, 0), right, top, bottom))
             if np.isnan(depth):
                 continue
