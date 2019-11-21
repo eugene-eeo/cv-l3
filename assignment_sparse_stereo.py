@@ -17,7 +17,7 @@
 import cv2
 import os
 import numpy as np
-from utils import hist_match, annotate_image, USEFUL_NAMES
+from utils import annotate_image, USEFUL_NAMES, tiled_histogram_eq
 from surf import match, find_keypoints_and_descriptors
 from yolo2 import yolov3
 
@@ -90,9 +90,8 @@ def preprocess(imgL, imgR):
     grayL = cv2.cvtColor(imgL,cv2.COLOR_BGR2GRAY)
     grayR = cv2.cvtColor(imgR,cv2.COLOR_BGR2GRAY)
 
-    grayL = np.power(grayL, 0.85).astype(np.uint8)
-    grayR = np.power(grayR, 0.85).astype(np.uint8)
-    grayR = hist_match(grayR, grayL).astype(np.uint8)
+    grayL = tiled_histogram_eq(grayL)
+    grayR = tiled_histogram_eq(grayR)
     return grayL, grayR
 
 
