@@ -3,7 +3,7 @@ import os
 import numpy as np
 from yolo2 import yolov3
 from utils import annotate_image, USEFUL_NAMES, mode, equalise_hist
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 
 # where is the data ? - set this to where you have it
 
