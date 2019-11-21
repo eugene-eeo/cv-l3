@@ -89,3 +89,10 @@ USEFUL_NAMES = {
     'parking meter',
     'skateboard',
 }
+
+
+def mode(array):
+    (_, idx, counts) = np.unique(array, return_index=True, return_counts=True)
+    index = idx[np.argmax(counts)]
+    mode = array[index]
+    return mode

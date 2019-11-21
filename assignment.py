@@ -1,9 +1,9 @@
 import cv2
 import os
-import statistics
 import numpy as np
 from yolo2 import yolov3
-from utils import annotate_image, hist_match, USEFUL_NAMES, sharpen
+from utils import annotate_image, USEFUL_NAMES, mode
+# import matplotlib.pyplot as plt
 
 # where is the data ? - set this to where you have it
 
@@ -61,25 +61,27 @@ def get_distance_otsu(disparities, bounding_box):
     depths = depths[depths > ret]
     # Be conservative here, we take the maximum disparity =>
     # minimum depth between the mode and the median.
-    return (f * B) / max(np.median(depths), statistics.mode(depths))
+    return (f * B) / max(np.median(depths), mode(depths))
 
 
 def preprocess(imgL, imgR):
     # Does preprocessing of the colour images.
     # The output is a pair of corresponding images in grayscale.
-    # imgL = cv2.bilateralFilter(imgL, 5, 50, 50)
-    # imgR = cv2.bilateralFilter(imgR, 5, 50, 50)
+    imgL = cv2.bilateralFilter(imgL, 5, 50, 50)
+    imgR = cv2.bilateralFilter(imgR, 5, 50, 50)
 
     grayL = cv2.cvtColor(imgL, cv2.COLOR_BGR2GRAY)
     grayR = cv2.cvtColor(imgR, cv2.COLOR_BGR2GRAY)
 
-    grayL = sharpen(grayL, grayL)
-    grayR = sharpen(grayR, grayR)
+    # grayL = sharpen(grayL, grayL)
+    # grayR = sharpen(grayR, grayR)
 
-    # grayL = cv2.equalizeHist(grayL)
-    # grayR = cv2.equalizeHist(grayR)
+    grayL = np.power(grayL, 0.75).astype('uint8')
+    grayR = np.power(grayR, 0.75).astype('uint8')
+    grayL = cv2.equalizeHist(grayL)
+    grayR = cv2.equalizeHist(grayR)
 
-    grayR = hist_match(grayR, grayL).astype('uint8')
+    # grayR = hist_match(grayR, grayL).astype('uint8')
     return grayL, grayR
 
 #####################################################################
@@ -143,11 +145,6 @@ for filename_left in left_file_list:
         dispr = right_matcher.compute(grayR, grayL)
         disparity = wls_filter.filter(displ, imgL, None, dispr)
 
-        # filter out noise and speckles (adjust parameters as needed)
-
-        # dispNoiseFilter = 5; # increase for more agressive filtering
-        # cv2.filterSpeckles(disparity, 0, 4000, max_disparity - dispNoiseFilter)
-
         # divide by 16 and convert to 8-bit image (then range of values should
         # be 0 -> max_disparity) but in fact is (-1 -> max_disparity - 1)
         # so we fix this also using a initial threshold between 0 and max_disparity
@@ -172,6 +169,36 @@ for filename_left in left_file_list:
 
         annotate_image(tags, imgL)
         cv2.imshow('result', imgL)
+
+        # plt.figure(1)
+        # plt.axis("off")
+        # plt.imshow(cv2.cvtColor(imgL, cv2.COLOR_BGR2RGB))
+        # plt.tight_layout()
+
+        # fig, axs = plt.subplots(len(tags), gridspec_kw={'hspace': 0})
+        # max_frame_disp = max(np.nanmax(disparity_scaled[top:bottom, max(left,0):right]) for (_, _, _, left, top, right, bottom) in tags)
+        # for i, (depth, class_name, _, left, top, right, bottom) in enumerate(tags):
+        #     # Plotting histogram of these disparities
+        #     disps = disparity_scaled[top:bottom, max(left,0):right]
+        #     disps = disps[disps > 0].ravel()
+        #     ax = axs[i]
+        #     ret, _ = cv2.threshold(disps, 0, max_disparity, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        #     (n, bins, patches) = ax.hist(disps, bins=range(0, max_frame_disp + 1), density=True, stacked=True, linewidth=1, edgecolor='black', color='white')
+        #     ax.set_ylim([0, 1])
+        #     ax.set_xlim([0, max_frame_disp])
+        #     ax.text(0.5,0.85,"%s (%.2fm)" % (class_name, depth),
+        #             horizontalalignment='center',
+        #             transform=ax.transAxes)
+        #     ax.label_outer()
+
+        #     for j, patch in zip(range(max_disparity + 1), patches):
+        #         if j > ret:
+        #             patch.set_color('gray')
+        #             patch.set_linewidth(1)
+        #             patch.set_edgecolor('black')
+        # fig.tight_layout()
+        # plt.show()
+
         # cv2.imshow('grayL', grayL)
         # cv2.imshow('grayR', grayR)
 
