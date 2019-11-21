@@ -62,23 +62,19 @@ def get_distance_otsu(disparities, bounding_box):
     x0, x1, y0, y1 = bounding_box
     # Get an array of non-zero depths
     depths = disparities[y0:y1, x0:x1].ravel()
-    depths = depths[depths > 0]
-    if len(depths) == 0:
+    useful = depths > 0
+
+    # ~80% not useful information, just discard...
+    if useful.sum() / len(depths) < 0.20:
         return np.nan, None
 
+    depths = depths[useful]
     ret, thresholds = cv2.threshold(depths, 0, 1, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
-    # Hypothesis: the mode of the disparity map contains 'mostly'
-    # the correct values. Thus we should restrict ourselves to
-    # choosing the correct side of the thresholding.
+    # Hypothesis: the mode of a 'good' disparity map contains mostly
+    # the correct values.
     depth_mode = mode(depths)
     depths = depths[depths > ret]
-    # _, counts = np.unique(thresholds, return_counts=True)
-    # # if depth_mode >= ret:
-    # if depth_mode >= ret or counts[1] >= 2 * counts[0]:
-    #     depths = depths[depths > ret]
-    # else:
-    #     depths = depths[depths <= ret]
     # Be conservative here, we take the maximum disparity =>
     # minimum depth between the mode and the median.
     return (f * B) / max(np.median(depths), depth_mode), ret
@@ -175,21 +171,26 @@ for filename_left in left_file_list:
         # be 0 -> max_disparity) but in fact is (-1 -> max_disparity - 1)
         # so we fix this also using a initial threshold between 0 and max_disparity
         # as disparity=-1 means no disparity available
-
         _, disparity = cv2.threshold(disparity, 0, max_disparity * 16, cv2.THRESH_TOZERO)
         disparity_scaled = (disparity / 16.0).astype(np.uint8)
 
+        # Z-Buffering algorithm:
+        #  - We compute first a list of predicted depths and bounding boxes (tags).
+        #  - We then sort by the depth in ascending order.
+        #  - Go through the tags again, and then recompute the distances. This time,
+        #    we remove any depth information we use during computation (set it to 0).
+        #  - This should mean that we have better depth information...
         tags = []
         for class_name, confidence, left, top, right, bottom in yolov3(imgL):
-            if class_name not in USEFUL_NAMES:
-                continue
-            # depth = np.nanmedian(depths[top:bottom,max(left, 0):right])
-            left = max(left, 0)
-            depth, _ = get_distance_otsu(disparity_scaled, (left, right, top, bottom))
-            if np.isnan(depth):
-                continue
+            if class_name in USEFUL_NAMES:
+                left = max(left, 0)
+                depth, _ = get_distance_otsu(disparity_scaled, (left, right, top, bottom))
 
-            tags.append((depth, class_name, confidence, left, top, right, bottom))
+                # Ignore if we have a nan depth
+                if np.isnan(depth):
+                    continue
+
+                tags.append((depth, class_name, confidence, left, top, right, bottom))
 
         # Foreground first
         tags.sort()
@@ -208,41 +209,33 @@ for filename_left in left_file_list:
 
         # display image (scaling it to the full 0->255 range based on the number
         # of disparities in use for the stereo part)
-
         disparity_display = (disparity_scaled * (256. / max_disparity)).astype(np.uint8)
         cv2.imshow("disparity", disparity_display)
 
         annotate_image(new_tags, imgL)
-
         cv2.imshow('result', imgL)
-        cv2.imshow('grayL', grayL)
-        cv2.imshow('grayR', grayR)
+        # cv2.imshow('grayL', grayL)
+        # cv2.imshow('grayR', grayR)
 
-        # plt.figure(0)
-        # plt.axis("off")
-        # plt.imshow(disparity_display, "gray")
-        # plt.tight_layout()
         # plt.figure(1)
         # plt.axis("off")
         # plt.imshow(cv2.cvtColor(imgL, cv2.COLOR_BGR2RGB))
         # plt.tight_layout()
 
-        # fig, axes = plt.subplots(len(tags), 1, gridspec_kw={'hspace': 0, 'wspace': 0}, squeeze=False)
-        # max_frame_disp = max([np.nanmax(disparity_scaled[top:bottom, max(left,0):right]) for (_, _, _, left, top, right, bottom) in tags] + [0])
-        # for i, (depth, class_name, _, left, top, right, bottom) in enumerate(tags):
+        # fig, axes = plt.subplots(len(new_tags), 2, gridspec_kw={'hspace': 0, 'wspace': 0}, sharex=True, squeeze=False)
+        # max_frame_disp = max([np.nanmax(disparity_scaled[top:bottom, left:right]) for (_, _, _, left, top, right, bottom) in tags] + [0])
+        # for i, (depth, class_name, _, left, top, right, bottom) in enumerate(new_tags):
         #     # Plotting histogram of these disparities
-        #     disps = disparity_scaled[top:bottom, max(left,0):right]
-
+        #     disps = buffers[i]
         #     disps = disps[disps > 0].ravel()
         #     lax = axes[i, 0]
-        #     depth_mode = mode(disps)
         #     ret, _ = cv2.threshold(disps, 0, max_disparity, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        #     depth_mode = mode(disps)
 
-        #     less, more = ('white', 'gray') if depth_mode >= ret else ('gray', 'white')
+        #     less, more = ('white', '#85BB65') if depth_mode >= ret else ('#85BB65', 'white')
 
         #     (n, bins, patches) = lax.hist(disps, bins=range(0, max_frame_disp + 1), density=True, stacked=True, linewidth=1, edgecolor='black', color=less)
         #     lax.set_ylim([0, 1])
-        #     lax.set_xlim([0, max_frame_disp])
         #     lax.text(0.5,0.85,"%s (%.2fm)" % (class_name, depth),
         #              horizontalalignment='center',
         #              transform=lax.transAxes)
@@ -253,6 +246,17 @@ for filename_left in left_file_list:
         #             patch.set_color(more)
         #             patch.set_linewidth(1)
         #             patch.set_edgecolor('black')
+
+        #     rax = axes[i, 1]
+        #     disps = disparity_scaled[top:bottom, left:right].ravel()
+        #     disps = disps[disps > 0]
+        #     rax.hist(disps, bins=range(0, max_frame_disp + 1), density=True, stacked=True, linewidth=1, edgecolor='black', color='white')
+        #     rax.set_ylim([0, 1])
+        #     rax.text(0.5,0.85,"%s (%.2fm)" % (class_name, depth),
+        #              horizontalalignment='center',
+        #              transform=lax.transAxes)
+        #     rax.label_outer()
+        #     rax.grid(True)
 
         # fig.tight_layout()
         # plt.show()
