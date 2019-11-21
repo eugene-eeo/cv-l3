@@ -2,12 +2,13 @@ import cv2
 import numpy as np
 
 
-def equalise_hist(img):
-    # img must be a HSV image
-    v = img[:, :, 2]
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+def equalise_hist(img, axis=2):
+    # img should be a HSV image
+    # if it isn't then we need to change axis accordingly
+    v = img[:, :, axis]
+    clahe = cv2.createCLAHE(clipLimit=5.0, tileGridSize=(8,8))
     v = clahe.apply(v)
-    img[:, :, 2] = v
+    img[:, :, axis] = v
     return img
 
 

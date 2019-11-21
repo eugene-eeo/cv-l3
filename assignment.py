@@ -26,9 +26,12 @@ image_centre_w = 474.5;
 # e.g. set to 1506943191.487683 for the end of the Bailey, just as the vehicle turns
 
 # skip_forward_file_pattern = "1506943191.487683"; # set to timestamp to skip forward to
-skip_forward_file_pattern = "";
+skip_forward_file_pattern = "1506943221.487363";
+skip_forward_file_pattern = "1506943231.485679"
+skip_forward_file_pattern = "1506942484.480963"
+skip_forward_file_pattern = ""
 
-pause_playback = False; # pause until key press after each image
+pause_playback = True; # pause until key press after each image
 
 #####################################################################
 
@@ -44,6 +47,12 @@ left_file_list = sorted(os.listdir(full_path_directory_left));
 #####################################################################
 
 
+def z_buffer_update(disparities, bounding_box, threshold):
+    x0, x1, y0, y1 = bounding_box
+    disp = disparities[y0:y1, x0:x1]
+    disp[disp > threshold] = 0
+
+
 def get_distance_otsu(disparities, bounding_box):
     # Uses Otsu thresholding
     # Get distance from disparities and bounding_box
@@ -55,21 +64,24 @@ def get_distance_otsu(disparities, bounding_box):
     depths = disparities[y0:y1, x0:x1].ravel()
     depths = depths[depths > 0]
     if len(depths) == 0:
-        return np.nan
+        return np.nan, None
 
-    ret, _ = cv2.threshold(depths, 0, 1, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    ret, thresholds = cv2.threshold(depths, 0, 1, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
     # Hypothesis: the mode of the disparity map contains 'mostly'
     # the correct values. Thus we should restrict ourselves to
     # choosing the correct side of the thresholding.
     depth_mode = mode(depths)
-    if depth_mode >= ret:
-        depths = depths[depths > ret]
-    else:
-        depths = depths[depths <= ret]
+    depths = depths[depths > ret]
+    # _, counts = np.unique(thresholds, return_counts=True)
+    # # if depth_mode >= ret:
+    # if depth_mode >= ret or counts[1] >= 2 * counts[0]:
+    #     depths = depths[depths > ret]
+    # else:
+    #     depths = depths[depths <= ret]
     # Be conservative here, we take the maximum disparity =>
     # minimum depth between the mode and the median.
-    return (f * B) / max(np.median(depths), depth_mode)
+    return (f * B) / max(np.median(depths), depth_mode), ret
 
 
 def preprocess(imgL, imgR):
@@ -77,6 +89,9 @@ def preprocess(imgL, imgR):
     # The output is a pair of corresponding images in grayscale.
     imgL = cv2.cvtColor(imgL, cv2.COLOR_BGR2HSV)
     imgR = cv2.cvtColor(imgR, cv2.COLOR_BGR2HSV)
+
+    imgL[:,:,2] = np.power(imgL[:,:,2], 0.75).astype('uint8')
+    imgR[:,:,2] = np.power(imgR[:,:,2], 0.75).astype('uint8')
 
     imgL = equalise_hist(imgL)
     imgR = equalise_hist(imgR)
@@ -90,8 +105,6 @@ def preprocess(imgL, imgR):
     # grayL = sharpen(grayL, grayL)
     # grayR = sharpen(grayR, grayR)
 
-    grayL = np.power(grayL, 0.75).astype('uint8')
-    grayR = np.power(grayR, 0.75).astype('uint8')
     # grayL = cv2.equalizeHist(grayL)
     # grayR = cv2.equalizeHist(grayR)
 
@@ -171,65 +184,78 @@ for filename_left in left_file_list:
             if class_name not in USEFUL_NAMES:
                 continue
             # depth = np.nanmedian(depths[top:bottom,max(left, 0):right])
-            depth = get_distance_otsu(disparity_scaled, (max(left, 0), right, top, bottom))
+            left = max(left, 0)
+            depth, _ = get_distance_otsu(disparity_scaled, (left, right, top, bottom))
             if np.isnan(depth):
                 continue
 
             tags.append((depth, class_name, confidence, left, top, right, bottom))
 
+        # Foreground first
+        tags.sort()
+        disparity_z_buffer = np.copy(disparity_scaled)
+        new_tags = []
+        for i, (_, class_name, confidence, left, top, right, bottom) in enumerate(tags):
+            depth, threshold = get_distance_otsu(disparity_z_buffer, (left, right, top, bottom))
+            if np.isnan(depth):
+                continue
+
+            z_buffer_update(disparity_z_buffer, (left, right, top, bottom), threshold)
+            new_tags.append((depth, class_name, confidence, left, top, right, bottom))
+
         # Sort by z (depth) so we draw the back labels first
-        tags.sort(reverse=True)
+        new_tags.sort(reverse=True)
 
         # display image (scaling it to the full 0->255 range based on the number
         # of disparities in use for the stereo part)
 
-        # disparity_display = (disparity_scaled * (256. / max_disparity)).astype(np.uint8)
-        # cv2.imshow("disparity", disparity_display)
+        disparity_display = (disparity_scaled * (256. / max_disparity)).astype(np.uint8)
+        cv2.imshow("disparity", disparity_display)
 
-        annotate_image(tags, imgL)
+        annotate_image(new_tags, imgL)
 
-        # cv2.imshow('result', imgL)
-        # cv2.imshow('grayL', grayL)
-        # cv2.imshow('grayR', grayR)
+        cv2.imshow('result', imgL)
+        cv2.imshow('grayL', grayL)
+        cv2.imshow('grayR', grayR)
 
         # plt.figure(0)
         # plt.axis("off")
         # plt.imshow(disparity_display, "gray")
         # plt.tight_layout()
-        plt.figure(1)
-        plt.axis("off")
-        plt.imshow(cv2.cvtColor(imgL, cv2.COLOR_BGR2RGB))
-        plt.tight_layout()
+        # plt.figure(1)
+        # plt.axis("off")
+        # plt.imshow(cv2.cvtColor(imgL, cv2.COLOR_BGR2RGB))
+        # plt.tight_layout()
 
-        fig, axes = plt.subplots(len(tags), 1, gridspec_kw={'hspace': 0, 'wspace': 0}, squeeze=False)
-        max_frame_disp = max(np.nanmax(disparity_scaled[top:bottom, max(left,0):right]) for (_, _, _, left, top, right, bottom) in tags)
-        for i, (depth, class_name, _, left, top, right, bottom) in enumerate(tags):
-            # Plotting histogram of these disparities
-            disps = disparity_scaled[top:bottom, max(left,0):right]
+        # fig, axes = plt.subplots(len(tags), 1, gridspec_kw={'hspace': 0, 'wspace': 0}, squeeze=False)
+        # max_frame_disp = max([np.nanmax(disparity_scaled[top:bottom, max(left,0):right]) for (_, _, _, left, top, right, bottom) in tags] + [0])
+        # for i, (depth, class_name, _, left, top, right, bottom) in enumerate(tags):
+        #     # Plotting histogram of these disparities
+        #     disps = disparity_scaled[top:bottom, max(left,0):right]
 
-            disps = disps[disps > 0].ravel()
-            lax = axes[i, 0]
-            depth_mode = mode(disps)
-            ret, _ = cv2.threshold(disps, 0, max_disparity, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        #     disps = disps[disps > 0].ravel()
+        #     lax = axes[i, 0]
+        #     depth_mode = mode(disps)
+        #     ret, _ = cv2.threshold(disps, 0, max_disparity, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
-            less, more = ('white', 'gray') if depth_mode >= ret else ('gray', 'white')
+        #     less, more = ('white', 'gray') if depth_mode >= ret else ('gray', 'white')
 
-            (n, bins, patches) = lax.hist(disps, bins=range(0, max_frame_disp + 1), density=True, stacked=True, linewidth=1, edgecolor='black', color=less)
-            lax.set_ylim([0, 1])
-            lax.set_xlim([0, max_frame_disp])
-            lax.text(0.5,0.85,"%s (%.2fm)" % (class_name, depth),
-                     horizontalalignment='center',
-                     transform=lax.transAxes)
-            lax.label_outer()
-            lax.grid(True)
-            for j, patch in zip(range(max_disparity + 1), patches):
-                if j > ret:
-                    patch.set_color(more)
-                    patch.set_linewidth(1)
-                    patch.set_edgecolor('black')
+        #     (n, bins, patches) = lax.hist(disps, bins=range(0, max_frame_disp + 1), density=True, stacked=True, linewidth=1, edgecolor='black', color=less)
+        #     lax.set_ylim([0, 1])
+        #     lax.set_xlim([0, max_frame_disp])
+        #     lax.text(0.5,0.85,"%s (%.2fm)" % (class_name, depth),
+        #              horizontalalignment='center',
+        #              transform=lax.transAxes)
+        #     lax.label_outer()
+        #     lax.grid(True)
+        #     for j, patch in zip(range(max_disparity + 1), patches):
+        #         if j > ret:
+        #             patch.set_color(more)
+        #             patch.set_linewidth(1)
+        #             patch.set_edgecolor('black')
 
-        fig.tight_layout()
-        plt.show()
+        # fig.tight_layout()
+        # plt.show()
 
         # keyboard input for exit (as standard), save disparity and cropping
         # exit - x
