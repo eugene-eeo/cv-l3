@@ -2,8 +2,8 @@ import cv2
 import os
 import numpy as np
 from yolo2 import yolov3
-from utils import annotate_image, USEFUL_NAMES, mode, equalise_hist
-# import matplotlib.pyplot as plt
+from utils import annotate_image, USEFUL_NAMES, mode, tiled_histogram_eq, preprocess_for_object_recognition, compute_luma
+import matplotlib.pyplot as plt
 
 # where is the data ? - set this to where you have it
 
@@ -29,6 +29,7 @@ image_centre_w = 474.5;
 skip_forward_file_pattern = "1506943221.487363";
 skip_forward_file_pattern = "1506943231.485679"
 skip_forward_file_pattern = "1506942484.480963"
+skip_forward_file_pattern = "1506942630.475890"
 skip_forward_file_pattern = ""
 
 pause_playback = True; # pause until key press after each image
@@ -47,12 +48,6 @@ left_file_list = sorted(os.listdir(full_path_directory_left));
 #####################################################################
 
 
-def z_buffer_update(disparities, bounding_box, threshold):
-    x0, x1, y0, y1 = bounding_box
-    disp = disparities[y0:y1, x0:x1]
-    disp[disp > threshold] = 0
-
-
 def get_distance_otsu(disparities, bounding_box):
     # Uses Otsu thresholding
     # Get distance from disparities and bounding_box
@@ -62,14 +57,11 @@ def get_distance_otsu(disparities, bounding_box):
     x0, x1, y0, y1 = bounding_box
     # Get an array of non-zero depths
     depths = disparities[y0:y1, x0:x1].ravel()
-    useful = depths > 0
-
-    # ~80% not useful information, just discard...
-    if useful.sum() / len(depths) < 0.20:
+    depths = depths[depths > 0]
+    if len(depths) == 0:
         return np.nan, None
 
-    depths = depths[useful]
-    ret, thresholds = cv2.threshold(depths, 0, 1, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    ret, _ = cv2.threshold(depths, 0, 1, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
     # Hypothesis: the mode of a 'good' disparity map contains mostly
     # the correct values.
@@ -77,33 +69,20 @@ def get_distance_otsu(disparities, bounding_box):
     depths = depths[depths > ret]
     # Be conservative here, we take the maximum disparity =>
     # minimum depth between the mode and the median.
-    return (f * B) / max(np.median(depths), depth_mode), ret
+    return (f * B) / max(depth_mode, np.median(depths))
 
 
 def preprocess(imgL, imgR):
     # Does preprocessing of the colour images.
     # The output is a pair of corresponding images in grayscale.
-    imgL = cv2.cvtColor(imgL, cv2.COLOR_BGR2HSV)
-    imgR = cv2.cvtColor(imgR, cv2.COLOR_BGR2HSV)
+    grayL = compute_luma(imgL)
+    grayR = compute_luma(imgR)
 
-    imgL[:,:,2] = np.power(imgL[:,:,2], 0.75).astype('uint8')
-    imgR[:,:,2] = np.power(imgR[:,:,2], 0.75).astype('uint8')
+    grayL = np.power(grayL, 0.75).astype('uint8')
+    grayR = np.power(grayR, 0.75).astype('uint8')
 
-    imgL = equalise_hist(imgL)
-    imgR = equalise_hist(imgR)
-
-    # imgL = cv2.bilateralFilter(imgL_hsv, 5, 50, 50)
-    # imgR = cv2.bilateralFilter(imgR_hsv, 5, 50, 50)
-
-    grayL = imgL[:, :, 2]
-    grayR = imgR[:, :, 2]
-
-    # grayL = sharpen(grayL, grayL)
-    # grayR = sharpen(grayR, grayR)
-
-    # grayL = cv2.equalizeHist(grayL)
-    # grayR = cv2.equalizeHist(grayR)
-
+    grayL = tiled_histogram_eq(grayL)
+    grayR = tiled_histogram_eq(grayR)
     return grayL, grayR
 
 #####################################################################
@@ -150,9 +129,6 @@ for filename_left in left_file_list:
         imgL = cv2.imread(full_path_filename_left, cv2.IMREAD_COLOR)
         imgR = cv2.imread(full_path_filename_right, cv2.IMREAD_COLOR)
 
-        imgL = imgL[0:400,:]
-        imgR = imgR[0:400,:]
-
         print("-- files loaded successfully")
         print()
 
@@ -174,17 +150,18 @@ for filename_left in left_file_list:
         _, disparity = cv2.threshold(disparity, 0, max_disparity * 16, cv2.THRESH_TOZERO)
         disparity_scaled = (disparity / 16.0).astype(np.uint8)
 
-        # Z-Buffering algorithm:
-        #  - We compute first a list of predicted depths and bounding boxes (tags).
-        #  - We then sort by the depth in ascending order.
-        #  - Go through the tags again, and then recompute the distances. This time,
-        #    we remove any depth information we use during computation (set it to 0).
-        #  - This should mean that we have better depth information...
+        grayL = grayL[0:400,:]
+        grayR = grayR[0:400,:]
+        imgL = imgL[0:400,:]
+        disparity_scaled = disparity_scaled[0:400,:]
+
+        imgL = preprocess_for_object_recognition(imgL)
+
         tags = []
         for class_name, confidence, left, top, right, bottom in yolov3(imgL):
             if class_name in USEFUL_NAMES:
                 left = max(left, 0)
-                depth, _ = get_distance_otsu(disparity_scaled, (left, right, top, bottom))
+                depth = get_distance_otsu(disparity_scaled, (left, right, top, bottom))
 
                 # Ignore if we have a nan depth
                 if np.isnan(depth):
@@ -193,73 +170,52 @@ for filename_left in left_file_list:
                 tags.append((depth, class_name, confidence, left, top, right, bottom))
 
         # Foreground first
-        tags.sort()
-        disparity_z_buffer = np.copy(disparity_scaled)
-        new_tags = []
-        for i, (_, class_name, confidence, left, top, right, bottom) in enumerate(tags):
-            depth, threshold = get_distance_otsu(disparity_z_buffer, (left, right, top, bottom))
-            if np.isnan(depth):
-                continue
-
-            z_buffer_update(disparity_z_buffer, (left, right, top, bottom), threshold)
-            new_tags.append((depth, class_name, confidence, left, top, right, bottom))
-
-        # Sort by z (depth) so we draw the back labels first
-        new_tags.sort(reverse=True)
+        tags.sort(reverse=True)
 
         # display image (scaling it to the full 0->255 range based on the number
         # of disparities in use for the stereo part)
         disparity_display = (disparity_scaled * (256. / max_disparity)).astype(np.uint8)
-        cv2.imshow("disparity", disparity_display)
+        # cv2.imshow("disparity", disparity_display)
 
-        annotate_image(new_tags, imgL)
-        cv2.imshow('result', imgL)
+        annotate_image(tags, imgL)
+        # cv2.imshow('result', imgL)
         # cv2.imshow('grayL', grayL)
         # cv2.imshow('grayR', grayR)
 
-        # plt.figure(1)
-        # plt.axis("off")
-        # plt.imshow(cv2.cvtColor(imgL, cv2.COLOR_BGR2RGB))
-        # plt.tight_layout()
+        plt.figure(1)
+        plt.axis("off")
+        plt.imshow(cv2.cvtColor(imgL, cv2.COLOR_BGR2RGB))
+        plt.tight_layout()
 
-        # fig, axes = plt.subplots(len(new_tags), 2, gridspec_kw={'hspace': 0, 'wspace': 0}, sharex=True, squeeze=False)
-        # max_frame_disp = max([np.nanmax(disparity_scaled[top:bottom, left:right]) for (_, _, _, left, top, right, bottom) in tags] + [0])
-        # for i, (depth, class_name, _, left, top, right, bottom) in enumerate(new_tags):
-        #     # Plotting histogram of these disparities
-        #     disps = buffers[i]
-        #     disps = disps[disps > 0].ravel()
-        #     lax = axes[i, 0]
-        #     ret, _ = cv2.threshold(disps, 0, max_disparity, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-        #     depth_mode = mode(disps)
+        fig, axes = plt.subplots(len(tags), 1, gridspec_kw={'hspace': 0, 'wspace': 0}, sharex=True, sharey=True, squeeze=False)
+        max_frame_disp = max([np.nanmax(disparity_scaled[top:bottom, left:right]) for (_, _, _, left, top, right, bottom) in tags] + [0])
+        bins = [x + 0.5 for x in range(0, max_frame_disp + 1)]
+        for i, (depth, class_name, _, left, top, right, bottom) in enumerate(tags):
+            # Plotting histogram of these disparities
+            disps = disparity_scaled[top:bottom, left:right]
+            disps = disps[disps > 0].ravel()
+            lax = axes[i, 0]
+            ret, _ = cv2.threshold(disps, 0, max_disparity, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            depth_mode = mode(disps)
 
-        #     less, more = ('white', '#85BB65') if depth_mode >= ret else ('#85BB65', 'white')
+            (n, _, patches) = lax.hist(disps, bins=bins, density=True, stacked=True, linewidth=1, edgecolor='black', color='white')
+            lax.text(0.5,0.85,"%s (%.2fm)" % (class_name, depth),
+                     horizontalalignment='center',
+                     transform=lax.transAxes)
+            lax.axvline(x=ret, color='black', linewidth=0.7, ls='--')
+            lax.label_outer()
+            lax.grid(True)
 
-        #     (n, bins, patches) = lax.hist(disps, bins=range(0, max_frame_disp + 1), density=True, stacked=True, linewidth=1, edgecolor='black', color=less)
-        #     lax.set_ylim([0, 1])
-        #     lax.text(0.5,0.85,"%s (%.2fm)" % (class_name, depth),
-        #              horizontalalignment='center',
-        #              transform=lax.transAxes)
-        #     lax.label_outer()
-        #     lax.grid(True)
-        #     for j, patch in zip(range(max_disparity + 1), patches):
-        #         if j > ret:
-        #             patch.set_color(more)
-        #             patch.set_linewidth(1)
-        #             patch.set_edgecolor('black')
+            for j, patch in enumerate(patches):
+                if bins[j + 1] >= ret:
+                    patch.set_color('#ACE1AF')
+                if bins[j] <= depth_mode <= bins[j + 1]:
+                    patch.set_color('#85BB65')
+                patch.set_edgecolor('black')
+                patch.set_linewidth(1)
 
-        #     rax = axes[i, 1]
-        #     disps = disparity_scaled[top:bottom, left:right].ravel()
-        #     disps = disps[disps > 0]
-        #     rax.hist(disps, bins=range(0, max_frame_disp + 1), density=True, stacked=True, linewidth=1, edgecolor='black', color='white')
-        #     rax.set_ylim([0, 1])
-        #     rax.text(0.5,0.85,"%s (%.2fm)" % (class_name, depth),
-        #              horizontalalignment='center',
-        #              transform=lax.transAxes)
-        #     rax.label_outer()
-        #     rax.grid(True)
-
-        # fig.tight_layout()
-        # plt.show()
+        fig.tight_layout()
+        plt.show()
 
         # keyboard input for exit (as standard), save disparity and cropping
         # exit - x
@@ -267,23 +223,23 @@ for filename_left in left_file_list:
         # pause - space
         # next - n (in pause mode)
 
-        quit = False
-        while not quit:
-            key = cv2.waitKey(20 * (not(pause_playback))) & 0xFF; # wait 40ms (i.e. 1000ms / 25 fps = 40 ms)
-            if (key == ord('x')):       # exit
-                quit = True
-                break; # exit
-            elif (key == ord('s')):     # save
-                cv2.imwrite("left.png", imgL)
-                cv2.imwrite("right.png", imgR)
-                cv2.imwrite("disparity.png", disparity_display)
-            elif (key == ord(' ')):     # pause (on next frame)
-                pause_playback = not(pause_playback)
-            if pause_playback and key != ord('n'):
-                continue
-            break
-        if quit:
-            break
+        # quit = False
+        # while not quit:
+        #     key = cv2.waitKey(20 * (not(pause_playback))) & 0xFF; # wait 40ms (i.e. 1000ms / 25 fps = 40 ms)
+        #     if (key == ord('x')):       # exit
+        #         quit = True
+        #         break; # exit
+        #     elif (key == ord('s')):     # save
+        #         cv2.imwrite("left.png", imgL)
+        #         cv2.imwrite("right.png", imgR)
+        #         cv2.imwrite("disparity.png", disparity_display)
+        #     elif (key == ord(' ')):     # pause (on next frame)
+        #         pause_playback = not(pause_playback)
+        #     if pause_playback and key != ord('n'):
+        #         continue
+        #     break
+        # if quit:
+        #     break
     else:
         print("-- files skipped (perhaps one is missing or not PNG)")
         print()

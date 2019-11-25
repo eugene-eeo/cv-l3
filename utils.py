@@ -2,14 +2,17 @@ import cv2
 import numpy as np
 
 
-def equalise_hist(img, axis=2):
-    # img should be a HSV image
-    # if it isn't then we need to change axis accordingly
-    v = img[:, :, axis]
-    clahe = cv2.createCLAHE(clipLimit=5.0, tileGridSize=(8,8))
-    v = clahe.apply(v)
-    img[:, :, axis] = v
-    return img
+def compute_luma(img):
+    B, G, R = cv2.split(img)
+    M = np.maximum(B, np.maximum(G, R))
+    return M
+
+
+def preprocess_for_object_recognition(imgL):
+    img = cv2.cvtColor(imgL, cv2.COLOR_BGR2YCrCb).astype('uint8')
+    tiled_histogram_eq(img[:, :, 0])
+    cv2.cvtColor(img, cv2.COLOR_YCrCb2BGR, imgL)
+    return imgL
 
 
 def sharpen(img, dst=None):
@@ -66,4 +69,5 @@ def mode(array):
 
 def tiled_histogram_eq(gray_img):
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
-    return clahe.apply(gray_img)
+    clahe.apply(gray_img, gray_img)
+    return gray_img
