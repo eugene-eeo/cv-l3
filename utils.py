@@ -9,16 +9,10 @@ def compute_luma(img):
 
 
 def preprocess_for_object_recognition(imgL):
-    img = cv2.cvtColor(imgL, cv2.COLOR_BGR2YCrCb).astype('uint8')
-    tiled_histogram_eq(img[:, :, 0])
-    cv2.cvtColor(img, cv2.COLOR_YCrCb2BGR, imgL)
+    img = cv2.cvtColor(imgL, cv2.COLOR_BGR2YUV).astype('uint8')
+    img[:, :, 0] = tiled_histogram_eq(img[:, :, 0])
+    cv2.cvtColor(img, cv2.COLOR_YUV2BGR, dst=imgL)
     return imgL
-
-
-def sharpen(img, dst=None):
-    # Convolves an image with the edge-sharpening filter.
-    kernel = np.array([[-1,-1,-1], [-1,9,-1], [-1,-1,-1]])
-    return cv2.filter2D(img, -1, kernel, dst=dst)
 
 
 def annotate_image(tags, img):
@@ -67,7 +61,7 @@ def mode(array):
     return mode
 
 
-def tiled_histogram_eq(gray_img):
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+def tiled_histogram_eq(gray_img, clipLimit=2.0, tileGridSize=(8,8)):
+    clahe = cv2.createCLAHE(clipLimit=clipLimit, tileGridSize=tileGridSize)
     clahe.apply(gray_img, gray_img)
     return gray_img
