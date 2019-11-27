@@ -135,9 +135,6 @@ for filename_left in left_file_list:
         # grayL = cv2.drawKeypoints(grayL, l_keypoints, None, (73, 58, 215))
         # grayR = cv2.drawKeypoints(grayR, r_keypoints, None, (73, 58, 215))
 
-        # imgL = imgL[0:400,:]
-        # imgR = imgR[0:400,:]
-
         tags = []
         for class_name, confidence, left, top, right, bottom in yolov3(imgL):
             left = max(left, 0)
@@ -157,12 +154,14 @@ for filename_left in left_file_list:
 
         # cv2.imshow('grayL', grayL)
         # cv2.imshow('grayR', grayR)
-        cv2.imshow('result', imgL)
+        # cv2.imshow('result', imgL)
 
         # Find nearest object and print
         nearest = "No detected objects (0.0m)" if len(tags) == 0 else "%s (%.1fm)" % (tags[-1][1], tags[-1][0])
         print(filename_left)
         print(filename_right, ":", nearest)
+
+        # cv2.imwrite("res/left_sparse_%s" % (filename_left.replace("_L", "")), imgL)
 
         # keyboard input for exit (as standard), save disparity and cropping
         # exit - x
@@ -177,7 +176,7 @@ for filename_left in left_file_list:
                 quit = True
                 break; # exit
             elif (key == ord('s')):     # save
-                cv2.imwrite("left.png", imgL)
+                cv2.imwrite("left_sparse_%s" % (filename_left.replace("_L", "")), imgL)
             elif (key == ord(' ')):     # pause (on next frame)
                 pause_playback = not(pause_playback)
             if pause_playback and key != ord('n'):
