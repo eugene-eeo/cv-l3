@@ -33,7 +33,7 @@ skip_forward_file_pattern = ""
 # skip_forward_file_pattern = "1506942630.475890"
 # skip_forward_file_pattern = "1506942718.476805"
 
-pause_playback = True; # pause until key press after each image
+pause_playback = False; # pause until key press after each image
 
 #####################################################################
 
@@ -112,12 +112,6 @@ for filename_left in left_file_list:
     full_path_filename_left = os.path.join(full_path_directory_left, filename_left)
     full_path_filename_right = os.path.join(full_path_directory_right, filename_right)
 
-    # for sanity print out these filenames
-
-    print(full_path_filename_left)
-    print(full_path_filename_right)
-    print()
-
     # check the file is a PNG file (left) and check a correspondoning right image
     # actually exists
 
@@ -130,9 +124,6 @@ for filename_left in left_file_list:
         imgL = cv2.imread(full_path_filename_left, cv2.IMREAD_COLOR)
         imgR = cv2.imread(full_path_filename_right, cv2.IMREAD_COLOR)
 
-        print("-- files loaded successfully")
-        print()
-
         # remember to convert to grayscale (as the disparity matching works on grayscale)
         # N.B. need to do for both as both are 3-channel images
         grayL, grayR = preprocess(imgL, imgR)
@@ -142,6 +133,7 @@ for filename_left in left_file_list:
         # (which for reasons best known to the OpenCV developers is returned scaled by 16)
         displ = left_matcher.compute(grayL, grayR)
         dispr = right_matcher.compute(grayR, grayL)
+
         disparity = wls_filter.filter(displ, imgL, None, dispr)
 
         # divide by 16 and convert to 8-bit image (then range of values should
@@ -150,8 +142,6 @@ for filename_left in left_file_list:
         # as disparity=-1 means no disparity available
         _, disparity = cv2.threshold(disparity, 0, max_disparity * 16, cv2.THRESH_TOZERO)
         disparity_scaled = (disparity / 16.0).astype(np.uint8)
-
-        # imgL = imgL[0:400,:]
         disparity_scaled = disparity_scaled[0:390,:]
 
         imgL = preprocess_for_object_recognition(imgL)
@@ -179,6 +169,12 @@ for filename_left in left_file_list:
 
         annotate_image(tags, imgL)
         cv2.imshow('result', imgL)
+
+        # Find nearest object
+        nearest = "No detected objects (0.0m)" if len(tags) == 0 else "%s (%.1fm)" % (tags[-1][1], tags[-1][0])
+
+        print(filename_left)
+        print(filename_right, ":", nearest)
         # cv2.imshow('grayL', grayL)
         # cv2.imshow('grayR', grayR)
 

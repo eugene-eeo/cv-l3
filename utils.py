@@ -3,14 +3,14 @@ import numpy as np
 
 
 def is_valid_match(class_name, left, top, right, bottom):
-    if (class_name == "car" and is_bonnet_bounding_box(left, top, right, bottom)) \
+    if is_bonnet_bounding_box(left, top, right, bottom) \
             or class_name not in USEFUL_NAMES:
         return False
     return True
 
 
 def is_bonnet_bounding_box(left, top, right, bottom):
-    return (bottom >= 500 or top >= 350) and right - left >= 900
+    return (bottom >= 450 or top >= 350) and right - left >= 900
 
 
 def compute_luma(img):
@@ -20,9 +20,9 @@ def compute_luma(img):
 
 
 def preprocess_for_object_recognition(imgL):
-    img = cv2.cvtColor(imgL, cv2.COLOR_BGR2YUV).astype('uint8')
-    img[:, :, 0] = tiled_histogram_eq(img[:, :, 0])
-    cv2.cvtColor(img, cv2.COLOR_YUV2BGR, dst=imgL)
+    imgL = cv2.cvtColor(imgL, cv2.COLOR_BGR2YCrCb, dst=imgL)
+    imgL[:, :, 0] = tiled_histogram_eq(imgL[:, :, 0])
+    cv2.cvtColor(imgL, cv2.COLOR_YCrCb2BGR, dst=imgL)
     return imgL
 
 
