@@ -3,7 +3,6 @@ import os
 import numpy as np
 from yolo2 import yolov3
 from utils import annotate_image, mode, tiled_histogram_eq, preprocess_for_object_recognition, compute_luma, is_valid_match
-import matplotlib.pyplot as plt
 
 # where is the data ? - set this to where you have it
 
@@ -182,41 +181,6 @@ for filename_left in left_file_list:
         cv2.imshow('result', imgL)
         # cv2.imshow('grayL', grayL)
         # cv2.imshow('grayR', grayR)
-
-        # plt.figure(1)
-        # plt.axis("off")
-        # plt.imshow(cv2.cvtColor(imgL, cv2.COLOR_BGR2RGB))
-        # plt.tight_layout()
-
-        # fig, axes = plt.subplots(len(tags), 1, gridspec_kw={'hspace': 0, 'wspace': 0}, sharex=True, sharey=True, squeeze=False)
-        # max_frame_disp = max([np.nanmax(disparity_scaled[top:bottom, left:right]) for (_, _, _, left, top, right, bottom) in tags] + [0])
-        # bins = [x + 0.5 for x in range(0, max_frame_disp + 1)]
-        # for i, (depth, class_name, _, left, top, right, bottom) in enumerate(tags):
-        #     # Plotting histogram of these disparities
-        #     disps = disparity_scaled[top:bottom, left:right]
-        #     disps = disps[disps > 0].ravel()
-        #     lax = axes[i, 0]
-        #     ret, _ = cv2.threshold(disps, 0, max_disparity, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-        #     depth_mode = mode(disps)
-
-        #     (n, _, patches) = lax.hist(disps, bins=bins, density=True, stacked=True, linewidth=1, edgecolor='black', color='white')
-        #     lax.text(0.5,0.85,"%s (%.2fm)" % (class_name, depth),
-        #              horizontalalignment='center',
-        #              transform=lax.transAxes)
-        #     lax.axvline(x=ret, color='black', linewidth=0.7, ls='--')
-        #     lax.label_outer()
-        #     lax.grid(True)
-
-        #     for j, patch in enumerate(patches):
-        #         if bins[j + 1] >= ret:
-        #             patch.set_color('#ACE1AF')
-        #         if bins[j] <= depth_mode <= bins[j + 1]:
-        #             patch.set_color('#85BB65')
-        #         patch.set_edgecolor('black')
-        #         patch.set_linewidth(1)
-
-        # fig.tight_layout()
-        # plt.show()
 
         # keyboard input for exit (as standard), save disparity and cropping
         # exit - x

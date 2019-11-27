@@ -17,7 +17,7 @@
 import cv2
 import os
 import numpy as np
-from utils import annotate_image, tiled_histogram_eq, preprocess_for_object_recognition, is_valid_match
+from utils import annotate_image, tiled_histogram_eq, preprocess_for_object_recognition, is_valid_match, compute_luma
 from surf import match, find_keypoints_and_descriptors
 from yolo2 import yolov3
 
@@ -58,37 +58,34 @@ left_file_list = sorted(os.listdir(full_path_directory_left));
 
 #####################################################################
 
-def depth_map(shape, l_keypoints, l_descriptors, r_keypoints, r_descriptors):
-    # Computes a depth map of a given shape in metres, given the ORB feature
+def disparity_map(shape, l_keypoints, l_descriptors, r_keypoints, r_descriptors):
+    # Computes a disparity map of a given shape in metres, given the ORB feature
     # point matches.
     depths = np.full(shape, np.nan, dtype=np.float32)
-
-    B = stereo_camera_baseline_m
-    f = camera_focal_length_px
-    m = f * B
-
     for left_kp, right_kp in match(l_keypoints, l_descriptors, r_keypoints, r_descriptors):
         # Left and right x and y values (indices into the image)
-        # respectively
         lx, ly = left_kp.pt
         rx, ry = right_kp.pt
 
         # Calculate disparity (d = |P_L - P_R|)
         d = ((lx - rx)**2 + (ly - ry)**2) ** 0.5
         if d > 0:
-            depths[int(ly), int(lx)] = m / d
+            depths[int(ly), int(lx)] = d
     return depths
 
 
-def get_distance(depth_map, bounding_box):
+def get_distance(disparity_map, bounding_box):
+    B = stereo_camera_baseline_m
+    f = camera_focal_length_px
+
     x0, x1, y0, y1 = bounding_box
-    return np.nanmedian(depth_map[y0:y1, x0:x1])
+    return (f * B) / np.nanpercentile(disparity_map[y0:y1, x0:x1], 75)
 
 
 def preprocess(imgL, imgR):
     # Does preprocessing of the image pairs
-    grayL = cv2.cvtColor(imgL,cv2.COLOR_BGR2GRAY)
-    grayR = cv2.cvtColor(imgR,cv2.COLOR_BGR2GRAY)
+    grayL = compute_luma(imgL)
+    grayR = compute_luma(imgR)
 
     grayL = tiled_histogram_eq(grayL)
     grayR = tiled_histogram_eq(grayR)
@@ -134,18 +131,11 @@ for filename_left in left_file_list:
         # remember to convert to grayscale (as the disparity matching works on grayscale)
         # N.B. need to do for both as both are 3-channel images
         grayL, grayR = preprocess(imgL, imgR)
-
-        # scale the disparity to 8-bit for viewing
-        # divide by 16 and convert to 8-bit image (then range of values should
-        # be 0 -> max_disparity) but in fact is (-1 -> max_disparity - 1)
-        # so we fix this also using a initial threshold between 0 and max_disparity
-        # as disparity=-1 means no disparity available
-
         grayL = grayL[0:390, :]
         grayR = grayR[0:390, :]
 
         l_keypoints, l_descriptors, r_keypoints, r_descriptors = find_keypoints_and_descriptors(grayL, grayR)
-        depths = depth_map(grayL.shape, l_keypoints, l_descriptors, r_keypoints, r_descriptors)
+        disparities = disparity_map(grayL.shape, l_keypoints, l_descriptors, r_keypoints, r_descriptors)
 
         # grayL = cv2.drawKeypoints(grayL, l_keypoints, None, (73, 58, 215))
         # grayR = cv2.drawKeypoints(grayR, r_keypoints, None, (73, 58, 215))
@@ -162,7 +152,8 @@ for filename_left in left_file_list:
             top = max(top, 0)
             if not is_valid_match(class_name, left, top, right, bottom):
                 continue
-            depth = get_distance(depths, (left, right, top, bottom))
+            depth = get_distance(disparities, (left, right, top, bottom))
+            # Ignore if we have a nan depth
             if np.isnan(depth):
                 continue
 
@@ -180,15 +171,23 @@ for filename_left in left_file_list:
         # exit - x
         # save - s
         # pause - space
+        # next - n (in pause mode)
 
-        key = cv2.waitKey(40 * (not(pause_playback))) & 0xFF; # wait 40ms (i.e. 1000ms / 25 fps = 40 ms)
-        if (key == ord('x')):       # exit
-            break; # exit
-        elif (key == ord('s')):     # save
-            cv2.imwrite("left.png", imgL)
-            cv2.imwrite("right.png", imgR)
-        elif (key == ord(' ')):     # pause (on next frame)
-            pause_playback = not(pause_playback);
+        quit = False
+        while not quit:
+            key = cv2.waitKey(20 * (not(pause_playback))) & 0xFF; # wait 40ms (i.e. 1000ms / 25 fps = 40 ms)
+            if (key == ord('x')):       # exit
+                quit = True
+                break; # exit
+            elif (key == ord('s')):     # save
+                cv2.imwrite("left.png", imgL)
+            elif (key == ord(' ')):     # pause (on next frame)
+                pause_playback = not(pause_playback)
+            if pause_playback and key != ord('n'):
+                continue
+            break
+        if quit:
+            break
     else:
         print("-- files skipped (perhaps one is missing or not PNG)");
         print();
