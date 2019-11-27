@@ -6,7 +6,7 @@ from utils import annotate_image, mode, tiled_histogram_eq, compute_luma, is_val
 
 # where is the data ? - set this to where you have it
 
-master_path_to_dataset = "/home/eeojun/Downloads/TTBB-durham-02-10-17-sub10"; # ** need to edit this **
+master_path_to_dataset = "samples"; # ** need to edit this **
 directory_to_cycle_left = "left-images";     # edit this if needed
 directory_to_cycle_right = "right-images";   # edit this if needed
 
@@ -173,7 +173,14 @@ for filename_left in left_file_list:
         print(filename_left)
         print(filename_right, ":", nearest)
 
-        # cv2.imwrite("res/left_dense_%s" % (filename_left.replace("_L", "")), imgL)
+        disparity = np.zeros((*disparity_display.shape, 3), dtype=np.uint8)
+        disparity[:, :, 0] = disparity_display
+        disparity[:, :, 1] = disparity_display
+        disparity[:, :, 2] = disparity_display
+
+        u = np.vstack([imgL, disparity])
+        cv2.imshow('result', u)
+        # cv2.imwrite("res/left_dense_%s" % (filename_left.replace("_L", "")), u)
 
         # keyboard input for exit (as standard), save disparity and cropping
         # exit - x
