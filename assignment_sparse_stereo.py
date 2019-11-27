@@ -17,7 +17,7 @@
 import cv2
 import os
 import numpy as np
-from utils import annotate_image, tiled_histogram_eq, preprocess_for_object_recognition, is_valid_match, compute_luma
+from utils import annotate_image, tiled_histogram_eq, is_valid_match, compute_luma
 from surf import match, find_keypoints_and_descriptors
 from yolo2 import yolov3
 
@@ -79,7 +79,11 @@ def get_distance(disparity_map, bounding_box):
     f = camera_focal_length_px
 
     x0, x1, y0, y1 = bounding_box
-    return (f * B) / np.nanpercentile(disparity_map[y0:y1, x0:x1], 75)
+    disps = disparity_map[y0:y1, x0:x1].ravel()
+    disps = disps[~np.isnan(disps)]
+    if len(disps) == 0:
+        return np.nan
+    return (f * B) / np.median(disps)
 
 
 def preprocess(imgL, imgR):
@@ -107,12 +111,6 @@ for filename_left in left_file_list:
     full_path_filename_left = os.path.join(full_path_directory_left, filename_left);
     full_path_filename_right = os.path.join(full_path_directory_right, filename_right);
 
-    # for sanity print out these filenames
-
-    print(full_path_filename_left);
-    print(full_path_filename_right);
-    print();
-
     # check the file is a PNG file (left) and check a correspondoning right image
     # actually exists
 
@@ -124,9 +122,6 @@ for filename_left in left_file_list:
 
         imgL = cv2.imread(full_path_filename_left, cv2.IMREAD_COLOR)
         imgR = cv2.imread(full_path_filename_right, cv2.IMREAD_COLOR)
-
-        print("-- files loaded successfully");
-        print();
 
         # remember to convert to grayscale (as the disparity matching works on grayscale)
         # N.B. need to do for both as both are 3-channel images
@@ -143,10 +138,7 @@ for filename_left in left_file_list:
         # imgL = imgL[0:400,:]
         # imgR = imgR[0:400,:]
 
-        imgL = preprocess_for_object_recognition(imgL)
-
         tags = []
-
         for class_name, confidence, left, top, right, bottom in yolov3(imgL):
             left = max(left, 0)
             top = max(top, 0)
@@ -166,6 +158,11 @@ for filename_left in left_file_list:
         # cv2.imshow('grayL', grayL)
         # cv2.imshow('grayR', grayR)
         cv2.imshow('result', imgL)
+
+        # Find nearest object and print
+        nearest = "No detected objects (0.0m)" if len(tags) == 0 else "%s (%.1fm)" % (tags[-1][1], tags[-1][0])
+        print(filename_left)
+        print(filename_right, ":", nearest)
 
         # keyboard input for exit (as standard), save disparity and cropping
         # exit - x

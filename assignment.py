@@ -2,7 +2,7 @@ import cv2
 import os
 import numpy as np
 from yolo2 import yolov3
-from utils import annotate_image, mode, tiled_histogram_eq, preprocess_for_object_recognition, compute_luma, is_valid_match
+from utils import annotate_image, mode, tiled_histogram_eq, compute_luma, is_valid_match
 
 # where is the data ? - set this to where you have it
 
@@ -144,8 +144,6 @@ for filename_left in left_file_list:
         disparity_scaled = (disparity / 16.0).astype(np.uint8)
         disparity_scaled = disparity_scaled[0:390,:]
 
-        imgL = preprocess_for_object_recognition(imgL)
-
         tags = []
         for class_name, confidence, left, top, right, bottom in yolov3(imgL):
             left = max(left, 0)
@@ -170,13 +168,10 @@ for filename_left in left_file_list:
         annotate_image(tags, imgL)
         cv2.imshow('result', imgL)
 
-        # Find nearest object
+        # Find nearest object and print
         nearest = "No detected objects (0.0m)" if len(tags) == 0 else "%s (%.1fm)" % (tags[-1][1], tags[-1][0])
-
         print(filename_left)
         print(filename_right, ":", nearest)
-        # cv2.imshow('grayL', grayL)
-        # cv2.imshow('grayR', grayR)
 
         # keyboard input for exit (as standard), save disparity and cropping
         # exit - x

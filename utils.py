@@ -19,13 +19,6 @@ def compute_luma(img):
     return M
 
 
-def preprocess_for_object_recognition(imgL):
-    imgL = cv2.cvtColor(imgL, cv2.COLOR_BGR2YCrCb, dst=imgL)
-    imgL[:, :, 0] = tiled_histogram_eq(imgL[:, :, 0])
-    cv2.cvtColor(imgL, cv2.COLOR_YCrCb2BGR, dst=imgL)
-    return imgL
-
-
 def annotate_image(tags, img):
     # Helper function to annotate the image with bounding
     # boxes and distance information
