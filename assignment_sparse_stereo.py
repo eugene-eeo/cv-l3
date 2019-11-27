@@ -17,7 +17,7 @@
 import cv2
 import os
 import numpy as np
-from utils import annotate_image, USEFUL_NAMES, tiled_histogram_eq
+from utils import annotate_image, tiled_histogram_eq, preprocess_for_object_recognition, is_valid_match
 from surf import match, find_keypoints_and_descriptors
 from yolo2 import yolov3
 
@@ -128,11 +128,6 @@ for filename_left in left_file_list:
         imgL = cv2.imread(full_path_filename_left, cv2.IMREAD_COLOR)
         imgR = cv2.imread(full_path_filename_right, cv2.IMREAD_COLOR)
 
-        # Crop images so that the bonnet of the car isn't being
-        # processed; we don't need that region anyways.
-        imgL = imgL[0:400,:]
-        imgR = imgR[0:400,:]
-
         print("-- files loaded successfully");
         print();
 
@@ -146,19 +141,28 @@ for filename_left in left_file_list:
         # so we fix this also using a initial threshold between 0 and max_disparity
         # as disparity=-1 means no disparity available
 
+        grayL = grayL[0:390, :]
+        grayR = grayR[0:390, :]
+
         l_keypoints, l_descriptors, r_keypoints, r_descriptors = find_keypoints_and_descriptors(grayL, grayR)
         depths = depth_map(grayL.shape, l_keypoints, l_descriptors, r_keypoints, r_descriptors)
 
         # grayL = cv2.drawKeypoints(grayL, l_keypoints, None, (73, 58, 215))
         # grayR = cv2.drawKeypoints(grayR, r_keypoints, None, (73, 58, 215))
 
+        # imgL = imgL[0:400,:]
+        # imgR = imgR[0:400,:]
+
+        imgL = preprocess_for_object_recognition(imgL)
+
         tags = []
 
         for class_name, confidence, left, top, right, bottom in yolov3(imgL):
-            # depth = np.nanmedian(depths[top:bottom,max(left, 0):right])
-            if class_name not in USEFUL_NAMES:
+            left = max(left, 0)
+            top = max(top, 0)
+            if not is_valid_match(class_name, left, top, right, bottom):
                 continue
-            depth = get_distance(depths, (max(left, 0), right, top, bottom))
+            depth = get_distance(depths, (left, right, top, bottom))
             if np.isnan(depth):
                 continue
 

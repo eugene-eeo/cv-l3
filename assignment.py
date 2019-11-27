@@ -2,7 +2,7 @@ import cv2
 import os
 import numpy as np
 from yolo2 import yolov3
-from utils import annotate_image, USEFUL_NAMES, mode, tiled_histogram_eq, preprocess_for_object_recognition, compute_luma
+from utils import annotate_image, mode, tiled_histogram_eq, preprocess_for_object_recognition, compute_luma, is_valid_match
 import matplotlib.pyplot as plt
 
 # where is the data ? - set this to where you have it
@@ -26,7 +26,8 @@ image_centre_w = 474.5;
 # e.g. set to 1506943191.487683 for the end of the Bailey, just as the vehicle turns
 
 # skip_forward_file_pattern = "1506943191.487683"; # set to timestamp to skip forward to
-skip_forward_file_pattern = "1506943221.487363";
+skip_forward_file_pattern = ""
+# skip_forward_file_pattern = "1506943221.487363";
 # skip_forward_file_pattern = "1506943231.485679"
 # skip_forward_file_pattern = "1506942484.480963"
 # skip_forward_file_pattern = "1506942530.47524"
@@ -151,25 +152,23 @@ for filename_left in left_file_list:
         _, disparity = cv2.threshold(disparity, 0, max_disparity * 16, cv2.THRESH_TOZERO)
         disparity_scaled = (disparity / 16.0).astype(np.uint8)
 
-        grayL = grayL[0:400,:]
-        grayR = grayR[0:400,:]
-        imgL = imgL[0:400,:]
-        disparity_scaled = disparity_scaled[0:400,:]
+        # imgL = imgL[0:400,:]
+        disparity_scaled = disparity_scaled[0:390,:]
 
         imgL = preprocess_for_object_recognition(imgL)
 
         tags = []
         for class_name, confidence, left, top, right, bottom in yolov3(imgL):
-            if class_name in USEFUL_NAMES:
-                left = max(left, 0)
-                top = max(top, 0)
-                depth = get_distance_otsu(disparity_scaled, (left, right, top, bottom))
+            left = max(left, 0)
+            top = max(top, 0)
+            if not is_valid_match(class_name, left, top, right, bottom):
+                continue
+            depth = get_distance_otsu(disparity_scaled, (left, right, top, bottom))
+            # Ignore if we have a nan depth
+            if np.isnan(depth):
+                continue
 
-                # Ignore if we have a nan depth
-                if np.isnan(depth):
-                    continue
-
-                tags.append((depth, class_name, confidence, left, top, right, bottom))
+            tags.append((depth, class_name, confidence, left, top, right, bottom))
 
         # Foreground first
         tags.sort(reverse=True)
@@ -177,7 +176,7 @@ for filename_left in left_file_list:
         # display image (scaling it to the full 0->255 range based on the number
         # of disparities in use for the stereo part)
         disparity_display = (disparity_scaled * (256. / max_disparity)).astype(np.uint8)
-        # cv2.imshow("disparity", disparity_display)
+        cv2.imshow("disparity", disparity_display)
 
         annotate_image(tags, imgL)
         cv2.imshow('result', imgL)

@@ -2,6 +2,17 @@ import cv2
 import numpy as np
 
 
+def is_valid_match(class_name, left, top, right, bottom):
+    if (class_name == "car" and is_bonnet_bounding_box(left, top, right, bottom)) \
+            or class_name not in USEFUL_NAMES:
+        return False
+    return True
+
+
+def is_bonnet_bounding_box(left, top, right, bottom):
+    return (bottom >= 500 or top >= 350) and right - left >= 900
+
+
 def compute_luma(img):
     B, G, R = cv2.split(img)
     M = np.maximum(B, np.maximum(G, R))
