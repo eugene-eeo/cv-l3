@@ -14,9 +14,7 @@ def is_bonnet_bounding_box(left, top, right, bottom):
 
 
 def compute_luma(img):
-    B, G, R = cv2.split(img)
-    M = np.maximum(B, np.maximum(G, R))
-    return M
+    return img.max(axis=2)
 
 
 def annotate_image(tags, img):
