@@ -176,7 +176,7 @@ for filename_left in left_file_list:
 
         u = np.vstack([imgL, disparity])
         cv2.imshow('result', u)
-        # cv2.imwrite("a/left_dense_%s" % (filename_left.replace("_L", "")), imgL)
+        # cv2.imwrite("res/left_dense_%s" % (filename_left.replace("_L", "")), u)
 
         # keyboard input for exit (as standard), save disparity and cropping
         # exit - x
