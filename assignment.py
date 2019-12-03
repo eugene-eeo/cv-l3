@@ -169,12 +169,8 @@ for filename_left in left_file_list:
         print(filename_left)
         print(filename_right, ":", nearest)
 
-        disparity = np.zeros((*disparity_display.shape, 3), dtype=np.uint8)
-        disparity[:, :, 0] = disparity_display
-        disparity[:, :, 1] = disparity_display
-        disparity[:, :, 2] = disparity_display
-
-        u = np.vstack([imgL, disparity])
+        disparity_bgr = cv2.merge((disparity_display,) * 3)
+        u = np.vstack([imgL, disparity_bgr])
         cv2.imshow('result', u)
         # cv2.imwrite("res/left_dense_%s" % (filename_left.replace("_L", "")), u)
 
