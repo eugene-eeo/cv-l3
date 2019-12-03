@@ -56,15 +56,9 @@ def get_distance_otsu(disparities, bounding_box):
     if len(disps) == 0:
         return np.nan
 
-    ret, _ = cv2.threshold(disps, 0, 1, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-
     # Hypothesis: the mode of a 'good' disparity map contains mostly
     # the correct values.
-    depth_mode = mode(disps)
-    disps = disps[disps > ret]
-    # Be conservative here, we take the maximum disparity =>
-    # minimum depth between the mode and the median.
-    return (f * B) / max(depth_mode, np.percentile(disps, 50, interpolation='higher'))
+    return (f * B) / max(mode(disps), np.percentile(disps, 50, interpolation='higher'))
 
 
 def preprocess(imgL, imgR):
@@ -172,7 +166,7 @@ for filename_left in left_file_list:
         disparity_bgr = cv2.merge((disparity_display,) * 3)
         u = np.vstack([imgL, disparity_bgr])
         cv2.imshow('result', u)
-        # cv2.imwrite("a/left_dense_%s" % (filename_left.replace("_L", "")), u)
+        # cv2.imwrite("res/left_dense_%s" % (filename_left.replace("_L", "")), u)
 
         # keyboard input for exit (as standard), save disparity and cropping
         # exit - x
