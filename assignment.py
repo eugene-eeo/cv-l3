@@ -1,12 +1,12 @@
 import cv2
 import os
 import numpy as np
+from utils import annotate_image, mode, tiled_histogram_eq, compute_luma, is_valid_match, preprocess_for_object_recognition
 from yolo2 import yolov3
-from utils import annotate_image, mode, tiled_histogram_eq, compute_luma, is_valid_match
 
 # where is the data ? - set this to where you have it
 
-master_path_to_dataset = "samples"; # ** need to edit this **
+master_path_to_dataset = "tt"; # ** need to edit this **
 directory_to_cycle_left = "left-images";     # edit this if needed
 directory_to_cycle_right = "right-images";   # edit this if needed
 
@@ -26,12 +26,6 @@ image_centre_w = 474.5;
 
 # skip_forward_file_pattern = "1506943191.487683"; # set to timestamp to skip forward to
 skip_forward_file_pattern = ""
-# skip_forward_file_pattern = "1506943221.487363";
-# skip_forward_file_pattern = "1506943231.485679"
-# skip_forward_file_pattern = "1506942484.480963"
-# skip_forward_file_pattern = "1506942530.47524"
-# skip_forward_file_pattern = "1506942630.475890"
-# skip_forward_file_pattern = "1506942718.476805"
 
 pause_playback = False; # pause until key press after each image
 
@@ -144,6 +138,8 @@ for filename_left in left_file_list:
         disparity_scaled = (disparity / 16.0).astype(np.uint8)
         disparity_scaled = disparity_scaled[0:390,:]
 
+        imgL = preprocess_for_object_recognition(imgL)
+
         tags = []
         for class_name, confidence, left, top, right, bottom in yolov3(imgL):
             left = max(left, 0)
@@ -180,7 +176,7 @@ for filename_left in left_file_list:
 
         u = np.vstack([imgL, disparity])
         cv2.imshow('result', u)
-        # cv2.imwrite("res/left_dense_%s" % (filename_left.replace("_L", "")), u)
+        # cv2.imwrite("a/left_dense_%s" % (filename_left.replace("_L", "")), imgL)
 
         # keyboard input for exit (as standard), save disparity and cropping
         # exit - x

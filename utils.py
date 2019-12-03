@@ -2,6 +2,13 @@ import cv2
 import numpy as np
 
 
+def preprocess_for_object_recognition(img):
+    img_hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    h, s, v = cv2.split(img_hsv)
+    v = tiled_histogram_eq(v, clipLimit=3)
+    return cv2.cvtColor(cv2.merge((h, s, v)), cv2.COLOR_HSV2BGR)
+
+
 def is_valid_match(class_name, left, top, right, bottom):
     if is_bonnet_bounding_box(left, top, right, bottom) \
             or class_name not in USEFUL_NAMES:

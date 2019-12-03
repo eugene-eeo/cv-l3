@@ -1,29 +1,13 @@
-#####################################################################
-
-# Example : load, display and compute SGBM disparity
-# for a set of rectified stereo images from a  directory structure
-# of left-images / right-images with filesname DATE_TIME_STAMP_{L|R}.png
-
-# basic illustrative python script for use with provided stereo datasets
-
-# Author : Toby Breckon, toby.breckon@durham.ac.uk
-
-# Copyright (c) 2017 Department of Computer Science,
-#                    Durham University, UK
-# License : LGPL - http://www.gnu.org/licenses/lgpl.html
-
-#####################################################################
-
 import cv2
 import os
 import numpy as np
-from utils import annotate_image, tiled_histogram_eq, is_valid_match, compute_luma
+from utils import annotate_image, tiled_histogram_eq, is_valid_match, compute_luma, preprocess_for_object_recognition
 from surf import match, find_keypoints_and_descriptors
 from yolo2 import yolov3
 
 # where is the data ? - set this to where you have it
 
-master_path_to_dataset = "/home/eeojun/Downloads/TTBB-durham-02-10-17-sub10"; # ** need to edit this **
+master_path_to_dataset = "tt"; # ** need to edit this **
 directory_to_cycle_left = "left-images";     # edit this if needed
 directory_to_cycle_right = "right-images";   # edit this if needed
 
@@ -132,6 +116,8 @@ for filename_left in left_file_list:
         l_keypoints, l_descriptors, r_keypoints, r_descriptors = find_keypoints_and_descriptors(grayL, grayR)
         disparities = disparity_map(grayL.shape, l_keypoints, l_descriptors, r_keypoints, r_descriptors)
 
+        imgL = preprocess_for_object_recognition(imgL)
+
         # grayL = cv2.drawKeypoints(grayL, l_keypoints, None, (73, 58, 215))
         # grayR = cv2.drawKeypoints(grayR, r_keypoints, None, (73, 58, 215))
 
@@ -154,14 +140,14 @@ for filename_left in left_file_list:
 
         # cv2.imshow('grayL', grayL)
         # cv2.imshow('grayR', grayR)
-        # cv2.imshow('result', imgL)
+        cv2.imshow('result', imgL)
 
         # Find nearest object and print
         nearest = "No detected objects (0.0m)" if len(tags) == 0 else "%s (%.1fm)" % (tags[-1][1], tags[-1][0])
         print(filename_left)
         print(filename_right, ":", nearest)
 
-        # cv2.imwrite("res/left_sparse_%s" % (filename_left.replace("_L", "")), imgL)
+        # cv2.imwrite("a/left_sparse_%s" % (filename_left.replace("_L", "")), imgL)
 
         # keyboard input for exit (as standard), save disparity and cropping
         # exit - x
