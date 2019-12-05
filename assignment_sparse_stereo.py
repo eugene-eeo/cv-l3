@@ -43,7 +43,7 @@ left_file_list = sorted(os.listdir(full_path_directory_left));
 #####################################################################
 
 def disparity_map(shape, l_keypoints, l_descriptors, r_keypoints, r_descriptors):
-    # Computes a disparity map of a given shape in metres, given the ORB feature
+    # Computes a disparity map of the image, given the ORB feature
     # point matches.
     depths = np.full(shape, np.nan, dtype=np.float32)
     for left_kp, right_kp in match(l_keypoints, l_descriptors, r_keypoints, r_descriptors):
